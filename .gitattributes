@@ -26,7 +26,7 @@
 *.ini    text
 *.cfg    text
 *.conf   text
-*.env    text
+*.conf   text
 .gitignore text
 .gitattributes text
 .editorconfig text

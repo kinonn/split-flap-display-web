@@ -60,14 +60,14 @@ body {
     font-family: "Courier New", Courier, monospace;
     font-size: 1.1rem;
     letter-spacing: 2px;
-    color: #dadce0;
+    color: #9aa0a6;
     margin-bottom: 28px;
     line-height: 1.8;
     user-select: none;
 }
 
 .valid-chars .char {
-    transition: color 0.15s ease, font-weight 0.15s ease;
+    transition: color 0.8s ease, font-weight 0.8s ease;
     display: inline;
 }
 

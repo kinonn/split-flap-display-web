@@ -1,4 +1,7 @@
+from pathlib import Path
 from pydantic_settings import BaseSettings
+
+CONFIG_FILE = Path(__file__).resolve().parent.parent / "app.conf"
 
 
 class Settings(BaseSettings):
@@ -8,7 +11,10 @@ class Settings(BaseSettings):
     publish_topic: str = "splitflap/splitflap/set"
     subscribe_topic: str = "splitflap/splitflap/state"
 
-    model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
+    model_config = {
+        "env_file": str(CONFIG_FILE) if CONFIG_FILE.exists() else None,
+        "env_file_encoding": "utf-8",
+    }
 
 
 settings = Settings()

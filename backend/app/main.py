@@ -21,6 +21,17 @@ STATIC_DIR = Path(__file__).resolve().parent.parent.parent / "frontend" / "stati
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    from .config import CONFIG_FILE
+    if CONFIG_FILE.exists():
+        logger.info("Loading configuration from: %s", CONFIG_FILE)
+    else:
+        logger.info("Configuration file not found at %s, using environment variables", CONFIG_FILE)
+    logger.info("Configuration loaded:")
+    logger.info("  MQTT_BROKER_HOST: %s", settings.mqtt_broker_host)
+    logger.info("  MQTT_BROKER_PORT: %s", settings.mqtt_broker_port)
+    logger.info("  MQTT_CLIENT_ID: %s", settings.mqtt_client_id)
+    logger.info("  PUBLISH_TOPIC: %s", settings.publish_topic)
+    logger.info("  SUBSCRIBE_TOPIC: %s", settings.subscribe_topic)
     await mqtt_client.start()
     yield
     await mqtt_client.stop()

@@ -7,6 +7,9 @@ const displayLine = document.getElementById("display-line");
 const displayText = document.getElementById("display-text");
 const sendStatus = document.getElementById("send-status");
 
+let previousValue = "";
+const fadeTimers = new Map();
+
 function buildValidCharsDisplay() {
     validCharsEl.innerHTML = "";
     for (const ch of VALID_CHARS) {
@@ -18,17 +21,35 @@ function buildValidCharsDisplay() {
     }
 }
 
-function updateHighlights() {
-    const activeChars = new Set(inputEl.value.toUpperCase());
+function highlightChar(ch) {
+    const upperCh = ch.toUpperCase();
     const spans = validCharsEl.querySelectorAll(".char");
     spans.forEach((span) => {
-        const ch = span.dataset.char;
-        if (activeChars.has(ch)) {
+        if (span.dataset.char === upperCh) {
             span.classList.add("active");
-        } else {
-            span.classList.remove("active");
+            if (fadeTimers.has(upperCh)) {
+                clearTimeout(fadeTimers.get(upperCh));
+            }
+            fadeTimers.set(upperCh, setTimeout(() => {
+                span.classList.remove("active");
+                fadeTimers.delete(upperCh);
+            }, 1000));
         }
     });
+}
+
+function updateHighlights() {
+    const currentValue = inputEl.value.toUpperCase();
+    const previousUpper = previousValue.toUpperCase();
+    
+    for (let i = 0; i < currentValue.length; i++) {
+        const ch = currentValue[i];
+        if (i >= previousUpper.length || ch !== previousUpper[i]) {
+            highlightChar(ch);
+        }
+    }
+    
+    previousValue = inputEl.value;
 }
 
 function filterInput() {
@@ -68,7 +89,7 @@ async function sendMessage() {
         if (res.ok) {
             showStatus("\u2713 Sent", "success");
             inputEl.value = "";
-            updateHighlights();
+            previousValue = "";
         } else {
             const data = await res.json();
             showStatus("Error: " + (data.detail || res.statusText), "error");

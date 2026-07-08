@@ -68,7 +68,7 @@ class MQTTClient:
                             if not subscribe_topic.matches(message.topic):
                                 continue
                             payload = message.payload.decode("utf-8", errors="replace")
-                            msg = {"topic": message.topic, "payload": payload}
+                            msg = {"topic": str(message.topic), "payload": payload}
                             self._history.append(msg)
                             for q in list(self._subscribers):
                                 try:

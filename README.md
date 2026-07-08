@@ -53,8 +53,8 @@ cd split-flap-display-web
 uv sync
 
 # Configure environment
-cp backend/.env.example backend/.env
-# Edit backend/.env with your MQTT broker settings
+cp backend/app.conf.example backend/app.conf
+# Edit backend/app.conf with your MQTT broker settings
 
 # Run the server
 uv run uvicorn backend.app.main:app --reload --port 8000
@@ -76,8 +76,8 @@ source .venv/bin/activate  # Linux/Mac
 pip install -r backend/requirements.txt
 
 # Configure environment
-cp backend/.env.example backend/.env
-# Edit backend/.env with your MQTT broker settings
+cp backend/app.conf.example backend/app.conf
+# Edit backend/app.conf with your MQTT broker settings
 
 # Run the server
 uvicorn backend.app.main:app --reload --port 8000
@@ -87,8 +87,8 @@ uvicorn backend.app.main:app --reload --port 8000
 
 ```bash
 # Configure environment
-cp backend/.env.example backend/.env
-# Edit backend/.env with your MQTT broker settings
+cp backend/app.conf.example backend/app.conf
+# Edit backend/app.conf with your MQTT broker settings
 # IMPORTANT: Set MQTT_BROKER_HOST=mosquitto if using the included broker
 
 # Build and run (includes Mosquitto broker)
@@ -115,11 +115,11 @@ Open http://localhost:8000 in your browser.
 git clone <repo-url>
 cd split-flap-display-web
 
-# Create production environment file
-cp backend/.env.example backend/.env
+# Create production configuration file
+cp backend/app.conf.example backend/app.conf
 ```
 
-Edit `backend/.env` for your environment:
+Edit `backend/app.conf` for your environment:
 
 ```env
 # If using the included Mosquitto broker (docker-compose):
@@ -225,7 +225,7 @@ docker stats split-flap-web split-flap-mosquitto
 If you have an existing MQTT broker, you can skip the included Mosquitto:
 
 ```bash
-# Update backend/.env
+# Update backend/app.conf
 MQTT_BROKER_HOST=your-broker.example.com
 MQTT_BROKER_PORT=1883
 
@@ -277,7 +277,7 @@ Adjust based on your load. The app is lightweight; limits can be increased for e
 
 ## Configuration
 
-Edit `backend/.env`:
+Edit `backend/app.conf`:
 
 ```env
 MQTT_BROKER_HOST=localhost
@@ -320,12 +320,12 @@ SUBSCRIBE_TOPIC=splitflap/splitflap/state
 split-flap-display-web/
 ├── backend/
 │   ├── app/
-│   │   ├── config.py          # Settings from .env
+│   │   ├── config.py          # Settings from app.conf
 │   │   ├── models.py          # Pydantic schemas
 │   │   ├── mqtt_client.py     # Async MQTT wrapper
 │   │   └── main.py            # FastAPI application
 │   ├── requirements.txt       # pip dependencies (alternative to uv)
-│   └── .env.example           # Environment template
+│   └── app.conf.example       # Configuration template
 ├── frontend/
 │   └── static/
 │       ├── index.html         # Main page
