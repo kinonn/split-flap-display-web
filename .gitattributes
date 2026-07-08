@@ -1,0 +1,56 @@
+# Auto detect text files and perform LF normalization
+*        text=auto
+
+# Source code
+*.py     text diff=python
+*.js     text
+*.html   text
+*.css    text
+*.json   text
+*.yaml   text
+*.yml    text
+*.toml   text
+*.xml    text
+*.svg    text
+
+# Scripts
+*.sh     text eol=lf
+*.bash   text eol=lf
+*.ps1    text eol=crlf
+*.bat    text eol=crlf
+*.cmd    text eol=crlf
+
+# Config and documentation
+*.md     text
+*.txt    text
+*.ini    text
+*.cfg    text
+*.conf   text
+*.env    text
+.gitignore text
+.gitattributes text
+.editorconfig text
+
+# Docker
+Dockerfile text
+docker-compose.yml text
+docker-compose.yaml text
+.dockerignore text
+
+# Mosquitto
+mosquitto.conf text
+
+# Lock files
+*.lock   text
+
+# Binary files
+*.png    binary
+*.jpg    binary
+*.jpeg   binary
+*.gif    binary
+*.ico    binary
+*.pdf    binary
+*.woff   binary
+*.woff2  binary
+*.ttf    binary
+*.eot    binary

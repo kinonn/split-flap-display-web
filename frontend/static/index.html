@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Home Split Flap Display</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <h1 class="title">Home Split Flap Display</h1>
+
+        <div id="display-line" class="display-line hidden">
+            <span class="display-prefix">Display:</span>
+            <span id="display-text"></span>
+        </div>
+
+        <div class="spacer"></div>
+
+        <div id="valid-chars" class="valid-chars"></div>
+
+        <div class="input-wrapper">
+            <input
+                type="text"
+                id="message-input"
+                class="message-input"
+                placeholder="Type your message..."
+                autocomplete="off"
+                autofocus
+            >
+        </div>
+
+        <div id="send-status" class="send-status"></div>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>

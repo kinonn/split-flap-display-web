@@ -1,0 +1,12 @@
+__pycache__
+*.pyc
+.git
+.gitignore
+*.md
+.env
+.env.*
+!.env.example
+.venv
+venv
+node_modules
+.DS_Store

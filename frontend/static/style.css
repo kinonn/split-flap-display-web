@@ -1,0 +1,121 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+        "Helvetica Neue", Arial, sans-serif;
+    background: #fff;
+    color: #202124;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.container {
+    width: 100%;
+    max-width: 640px;
+    padding: 0 20px;
+    text-align: center;
+}
+
+.title {
+    font-size: 3.5rem;
+    font-weight: 400;
+    color: #202124;
+    margin-bottom: 12px;
+    letter-spacing: -0.5px;
+}
+
+.display-line {
+    font-size: 1rem;
+    color: #70757a;
+    margin-bottom: 8px;
+    min-height: 1.4em;
+    transition: opacity 0.3s ease;
+}
+
+.display-line.hidden {
+    opacity: 0;
+}
+
+.display-prefix {
+    font-weight: 500;
+    color: #5f6368;
+}
+
+#display-text {
+    color: #202124;
+    font-weight: 500;
+}
+
+.spacer {
+    height: 40px;
+}
+
+.valid-chars {
+    font-family: "Courier New", Courier, monospace;
+    font-size: 1.1rem;
+    letter-spacing: 2px;
+    color: #dadce0;
+    margin-bottom: 28px;
+    line-height: 1.8;
+    user-select: none;
+}
+
+.valid-chars .char {
+    transition: color 0.15s ease, font-weight 0.15s ease;
+    display: inline;
+}
+
+.valid-chars .char.active {
+    color: #1a73e8;
+    font-weight: 700;
+}
+
+.input-wrapper {
+    display: flex;
+    justify-content: center;
+}
+
+.message-input {
+    width: 100%;
+    max-width: 540px;
+    padding: 14px 24px;
+    font-size: 1.1rem;
+    border: 1px solid #dfe1e5;
+    border-radius: 24px;
+    outline: none;
+    color: #202124;
+    background: #fff;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.message-input:hover {
+    border-color: #c0c3c7;
+    box-shadow: 0 1px 6px rgba(32, 33, 36, 0.12);
+}
+
+.message-input:focus {
+    border-color: #1a73e8;
+    box-shadow: 0 1px 6px rgba(26, 115, 232, 0.2);
+}
+
+.send-status {
+    margin-top: 16px;
+    font-size: 0.85rem;
+    color: #70757a;
+    min-height: 1.2em;
+    transition: opacity 0.5s ease;
+}
+
+.send-status.success {
+    color: #1a73e8;
+}
+
+.send-status.error {
+    color: #d93025;
+}
