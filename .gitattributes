@@ -37,9 +37,6 @@ docker-compose.yml text
 docker-compose.yaml text
 .dockerignore text
 
-# Mosquitto
-mosquitto.conf text
-
 # Lock files
 *.lock   text
 

@@ -55,6 +55,7 @@ class MQTTClient:
                     hostname=settings.mqtt_broker_host,
                     port=settings.mqtt_broker_port,
                     client_id=settings.mqtt_client_id,
+                    keepalive=30,
                 ) as client:
                     self._client = client
                     self._connected = True

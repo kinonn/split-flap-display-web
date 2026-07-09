@@ -33,7 +33,7 @@ function highlightChar(ch) {
             fadeTimers.set(upperCh, setTimeout(() => {
                 span.classList.remove("active");
                 fadeTimers.delete(upperCh);
-            }, 1000));
+            }, 500));
         }
     });
 }

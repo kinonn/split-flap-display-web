@@ -33,7 +33,7 @@ A clean, Google-inspired web interface for controlling a split-flap display via 
 └─────────────────┬───────────────────────┘
                   │ MQTT
 ┌─────────────────▼───────────────────────┐
-│  MQTT Broker (Mosquitto)                │
+│  External MQTT Broker                   │
 └─────────────────────────────────────────┘
 ```
 
@@ -105,7 +105,7 @@ Open http://localhost:8100 in your browser.
 ### Prerequisites
 
 - Docker Engine 20.10+ and Docker Compose v2+
-- An MQTT broker reachable from the app container
+- An external MQTT broker reachable from the app container
 
 ### Step 1: Prepare Configuration
 
@@ -206,16 +206,16 @@ docker compose logs -f
 docker stats split-flap-web
 ```
 
-### MQTT Broker
+### Using an External MQTT Broker
 
-```bash
-# Update backend/app.conf
+The app requires an external MQTT broker. Configure the broker address in `backend/app.conf`:
+
+```env
 MQTT_BROKER_HOST=your-broker.example.com
 MQTT_BROKER_PORT=1883
-
-# Start the app service
-docker compose up -d
 ```
+
+> **Note:** `localhost` or `127.0.0.1` refers to the container itself. Use the broker's IP address or a hostname reachable from inside the Docker network. mDNS hostnames (e.g., `rpi41.local`) may not resolve inside containers — use the IP address instead.
 
 ### Architecture Notes
 
@@ -244,7 +244,6 @@ Adjust based on your load. The app is lightweight; limits can be increased for e
 ### Security Considerations
 
 - The container runs as non-root user `appuser`
-- Mosquitto is configured with `allow_anonymous true` — add authentication for production
 - Expose only port 8100 (web) externally; keep port 1883 (MQTT) internal unless needed
 - Consider adding a reverse proxy (nginx, Caddy) for HTTPS termination
 
@@ -305,8 +304,7 @@ split-flap-display-web/
 │       ├── app.js             # Frontend logic
 │       └── style.css          # Styling
 ├── Dockerfile                 # Multi-stage production build with uv
-├── docker-compose.yml         # Production: App + Mosquitto
-├── mosquitto.conf             # Mosquitto config
+├── docker-compose.yml         # Production: App service
 ├── pyproject.toml             # uv project config
 └── uv.lock                    # Locked dependency versions
 ```
