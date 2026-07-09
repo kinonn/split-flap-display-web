@@ -23,7 +23,7 @@ STATIC_DIR = Path(__file__).resolve().parent.parent.parent / "frontend" / "stati
 async def lifespan(app: FastAPI):
     from .config import CONFIG_FILE
     if CONFIG_FILE.exists():
-        logger.info("Loading configuration from: %s", CONFIG_FILE)
+        logger.info("Loading configuration from file: %s", CONFIG_FILE)
     else:
         logger.info("Configuration file not found at %s, using environment variables", CONFIG_FILE)
     logger.info("Configuration loaded:")
