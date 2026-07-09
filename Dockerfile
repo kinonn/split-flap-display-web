@@ -17,6 +17,7 @@ COPY --from=builder --chown=appuser:appuser /app/.venv /app/.venv
 ENV PATH="/app/.venv/bin:$PATH"
 
 COPY --chown=appuser:appuser backend/app ./backend/app
+COPY --chown=appuser:appuser backend/app.conf ./backend/app.conf
 COPY --chown=appuser:appuser frontend ./frontend
 
 USER appuser

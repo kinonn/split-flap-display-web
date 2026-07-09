@@ -3,8 +3,7 @@ __pycache__
 .git
 .gitignore
 *.md
-app.conf
-app.conf.*
+!app.conf
 !app.conf.example
 .venv
 venv
