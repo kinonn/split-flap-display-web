@@ -181,7 +181,7 @@ docker compose down -v
 curl http://localhost:8100/api/config
 
 # Test publishing a message
-curl -X POST http://localhost:8000/api/publish \
+curl -X POST http://localhost:8100/api/publish \
   -H "Content-Type: application/json" \
   -d '{"payload": "HELLO WORLD"}'
 ```
@@ -245,7 +245,7 @@ Adjust based on your load. The app is lightweight; limits can be increased for e
 
 - The container runs as non-root user `appuser`
 - Mosquitto is configured with `allow_anonymous true` — add authentication for production
-- Expose only port 8000 (web) externally; keep port 1883 (MQTT) internal unless needed
+- Expose only port 8100 (web) externally; keep port 1883 (MQTT) internal unless needed
 - Consider adding a reverse proxy (nginx, Caddy) for HTTPS termination
 
 ## Configuration
