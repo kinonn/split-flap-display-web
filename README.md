@@ -89,9 +89,8 @@ uvicorn backend.app.main:app --reload --port 8000
 # Configure environment
 cp backend/app.conf.example backend/app.conf
 # Edit backend/app.conf with your MQTT broker settings
-# IMPORTANT: Set MQTT_BROKER_HOST=mosquitto if using the included broker
 
-# Build and run (includes Mosquitto broker)
+# Build and run the app
 docker compose up -d --build
 
 # Check status
@@ -106,7 +105,7 @@ Open http://localhost:8000 in your browser.
 ### Prerequisites
 
 - Docker Engine 20.10+ and Docker Compose v2+
-- An MQTT broker (included Mosquitto or external)
+- An MQTT broker reachable from the app container
 
 ### Step 1: Prepare Configuration
 
@@ -122,20 +121,15 @@ cp backend/app.conf.example backend/app.conf
 Edit `backend/app.conf` for your environment:
 
 ```env
-# If using the included Mosquitto broker (docker-compose):
-MQTT_BROKER_HOST=mosquitto
+MQTT_BROKER_HOST=your-broker.example.com
 MQTT_BROKER_PORT=1883
-
-# If using an external broker:
-# MQTT_BROKER_HOST=your-broker.example.com
-# MQTT_BROKER_PORT=1883
 
 MQTT_CLIENT_ID=splitflap-web
 PUBLISH_TOPIC=splitflap/splitflap/set
 SUBSCRIBE_TOPIC=splitflap/splitflap/state
 ```
 
-> **Important:** When using `docker compose`, set `MQTT_BROKER_HOST=mosquitto` to use the included broker. For an external broker, use its hostname or IP address.
+> **Important:** When using `docker compose`, set `MQTT_BROKER_HOST` to a hostname or IP address that is reachable from inside the app container. `localhost` points to the container itself.
 
 ### Step 2: Build the Container
 
@@ -169,7 +163,6 @@ docker compose ps
 # Expected output:
 # NAME                    STATUS
 # split-flap-web          Up (healthy)
-# split-flap-mosquitto    Up (healthy)
 
 # View logs
 docker compose logs -f
@@ -177,7 +170,7 @@ docker compose logs -f
 # Stop services
 docker compose down
 
-# Stop and remove volumes (cleans Mosquitto data)
+# Stop and remove volumes
 docker compose down -v
 ```
 
@@ -186,9 +179,6 @@ docker compose down -v
 ```bash
 # Check application health
 curl http://localhost:8000/api/config
-
-# Check MQTT broker connectivity
-docker compose exec mosquitto mosquitto_sub -t '$SYS/broker/clients/connected' -C 1 -W 3
 
 # Test publishing a message
 curl -X POST http://localhost:8000/api/publish \
@@ -200,16 +190,12 @@ curl -X POST http://localhost:8000/api/publish \
 
 **Health Checks:**
 - The app container checks `/api/config` every 30 seconds
-- Mosquitto checks broker connectivity every 30 seconds
-- Both containers auto-restart on failure (`restart: unless-stopped`)
+- The app container auto-restarts on failure (`restart: unless-stopped`)
 
 **Logs:**
 ```bash
 # Application logs
 docker compose logs -f app
-
-# Mosquitto logs
-docker compose logs -f mosquitto
 
 # All logs
 docker compose logs -f
@@ -217,32 +203,19 @@ docker compose logs -f
 
 **Resource Usage:**
 ```bash
-docker stats split-flap-web split-flap-mosquitto
+docker stats split-flap-web
 ```
 
-### Using an External MQTT Broker
-
-If you have an existing MQTT broker, you can skip the included Mosquitto:
+### MQTT Broker
 
 ```bash
 # Update backend/app.conf
 MQTT_BROKER_HOST=your-broker.example.com
 MQTT_BROKER_PORT=1883
 
-# Start only the app service
-docker compose up -d app
+# Start the app service
+docker compose up -d
 ```
-
-Or create a `docker-compose.override.yml`:
-
-```yaml
-services:
-  mosquitto:
-    profiles:
-      - internal
-```
-
-Then run: `docker compose up -d` (Mosquitto will be excluded by default).
 
 ### Architecture Notes
 

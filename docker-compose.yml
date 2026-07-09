@@ -6,9 +6,6 @@ services:
     ports:
       - "8000:8000"
     env_file: backend/app.conf
-    depends_on:
-      mosquitto:
-        condition: service_started
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/config')"]
       interval: 30s
@@ -23,24 +20,3 @@ services:
         reservations:
           memory: 128M
           cpus: '0.25'
-
-  mosquitto:
-    image: eclipse-mosquitto:2
-    container_name: split-flap-mosquitto
-    restart: unless-stopped
-    ports:
-      - "1883:1883"
-    volumes:
-      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
-      - mosquitto-data:/mosquitto/data
-      - mosquitto-log:/mosquitto/log
-    healthcheck:
-      test: ["CMD-SHELL", "mosquitto_sub -t '$$SYS/#' -C 1 -i healthcheck -W 3 || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
-
-volumes:
-  mosquitto-data:
-  mosquitto-log:
