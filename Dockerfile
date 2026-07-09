@@ -22,9 +22,9 @@ COPY --chown=appuser:appuser frontend ./frontend
 
 USER appuser
 
-EXPOSE 8000
+EXPOSE 8100
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/config')" || exit 1
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8100/api/config')" || exit 1
 
-CMD ["uvicorn", "backend.app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
+CMD ["uvicorn", "backend.app.main:app", "--host", "0.0.0.0", "--port", "8100", "--workers", "1"]

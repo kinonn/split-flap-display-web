@@ -98,7 +98,7 @@ docker compose ps
 docker compose logs -f app
 ```
 
-Open http://localhost:8000 in your browser.
+Open http://localhost:8100 in your browser.
 
 ## Production Deployment
 
@@ -178,7 +178,7 @@ docker compose down -v
 
 ```bash
 # Check application health
-curl http://localhost:8000/api/config
+curl http://localhost:8100/api/config
 
 # Test publishing a message
 curl -X POST http://localhost:8000/api/publish \
