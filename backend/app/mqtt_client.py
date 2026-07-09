@@ -49,6 +49,7 @@ class MQTTClient:
                 pass
 
     async def _run(self):
+        first_attempt = True
         while True:
             try:
                 async with Client(
@@ -63,6 +64,7 @@ class MQTTClient:
                                 settings.mqtt_broker_host, settings.mqtt_broker_port)
                     await client.subscribe(settings.subscribe_topic)
                     logger.info("Subscribed to topic: %s", settings.subscribe_topic)
+                    first_attempt = False
                     subscribe_topic = Topic(settings.subscribe_topic)
                     async with client.messages() as messages:
                         async for message in messages:
@@ -83,7 +85,10 @@ class MQTTClient:
             except MqttError as e:
                 self._connected = False
                 self._client = None
-                logger.warning("MQTT connection error: %s. Retrying in 5s...", e)
+                if first_attempt:
+                    logger.warning("MQTT connection error: %s. Retrying in 5s...", e)
+                else:
+                    logger.debug("MQTT connection error: %s. Retrying in 5s...", e)
                 await asyncio.sleep(5)
             except asyncio.CancelledError:
                 self._connected = False

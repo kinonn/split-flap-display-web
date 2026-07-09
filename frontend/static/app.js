@@ -6,6 +6,7 @@ const inputEl = document.getElementById("message-input");
 const displayLine = document.getElementById("display-line");
 const displayText = document.getElementById("display-text");
 const sendStatus = document.getElementById("send-status");
+const charCountEl = document.getElementById("char-count");
 
 let previousValue = "";
 const fadeTimers = new Map();
@@ -60,6 +61,12 @@ function filterInput() {
         inputEl.value = filtered;
     }
     updateHighlights();
+    updateCharCount();
+}
+
+function updateCharCount() {
+    const count = inputEl.value.length;
+    charCountEl.textContent = count > 0 ? count + " characters" : "";
 }
 
 let statusTimeout;
@@ -90,6 +97,7 @@ async function sendMessage() {
             showStatus("\u2713 Sent", "success");
             inputEl.value = "";
             previousValue = "";
+            updateCharCount();
         } else {
             const data = await res.json();
             showStatus("Error: " + (data.detail || res.statusText), "error");

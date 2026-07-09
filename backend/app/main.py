@@ -13,7 +13,12 @@ from .config import settings
 from .models import PublishRequest
 from .mqtt_client import mqtt_client
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.WARNING)
+logging.getLogger("backend.app").setLevel(logging.INFO)
+logging.getLogger("uvicorn.access").setLevel(logging.ERROR)
+logging.getLogger("uvicorn.error").setLevel(logging.WARNING)
+logging.getLogger("mqtt").setLevel(logging.ERROR)
+
 logger = logging.getLogger(__name__)
 
 STATIC_DIR = Path(__file__).resolve().parent.parent.parent / "frontend" / "static"

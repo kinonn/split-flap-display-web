@@ -112,6 +112,13 @@ body {
     transition: opacity 0.5s ease;
 }
 
+.char-count {
+    margin-top: 10px;
+    font-size: 0.85rem;
+    color: #9aa0a6;
+    min-height: 1.2em;
+}
+
 .send-status.success {
     color: #1a73e8;
 }
