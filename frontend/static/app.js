@@ -13,13 +13,20 @@ const fadeTimers = new Map();
 
 function buildValidCharsDisplay() {
     validCharsEl.innerHTML = "";
-    for (const ch of VALID_CHARS) {
+    const chars = Array.from(VALID_CHARS);
+    const splitIndex = Math.ceil(chars.length / 2);
+
+    chars.forEach((ch, index) => {
         const span = document.createElement("span");
         span.className = "char";
         span.dataset.char = ch;
         span.textContent = ch === " " ? "\u00A0" : ch;
         validCharsEl.appendChild(span);
-    }
+
+        if (index === splitIndex - 1) {
+            validCharsEl.appendChild(document.createElement("br"));
+        }
+    });
 }
 
 function highlightChar(ch) {
@@ -56,7 +63,9 @@ function updateHighlights() {
 function filterInput() {
     const filtered = [...inputEl.value]
         .filter((ch) => validSet.has(ch.toUpperCase()))
-        .join("");
+        .join("")
+        .toUpperCase();
+
     if (filtered !== inputEl.value) {
         inputEl.value = filtered;
     }
