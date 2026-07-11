@@ -8,13 +8,49 @@ const displayText = document.getElementById("display-text");
 const sendStatus = document.getElementById("send-status");
 const charCountEl = document.getElementById("char-count");
 
+function normalizeInputText(value) {
+    return (value || "").replace(/\u00A0/g, " ");
+}
+
+function getInputValue() {
+    return normalizeInputText(inputEl.textContent || "");
+}
+
+function renderInputText(value) {
+    const normalizedValue = normalizeInputText(value);
+    inputEl.innerHTML = "";
+    const chars = Array.from(normalizedValue || "");
+    const fragment = document.createDocumentFragment();
+
+    chars.forEach((ch) => {
+        const span = document.createElement("span");
+        span.className = "input-char";
+        span.textContent = ch === " " ? "\u00A0" : ch;
+        fragment.appendChild(span);
+    });
+
+    inputEl.appendChild(fragment);
+
+    const selection = window.getSelection();
+    const range = document.createRange();
+    if (inputEl.childNodes.length === 0) {
+        range.setStart(inputEl, 0);
+    } else {
+        range.setStartAfter(inputEl.lastChild);
+    }
+    range.collapse(true);
+    selection.removeAllRanges();
+    selection.addRange(range);
+    inputEl.focus();
+}
+
 let previousValue = "";
 const fadeTimers = new Map();
 
 function buildValidCharsDisplay() {
     validCharsEl.innerHTML = "";
     const chars = Array.from(VALID_CHARS);
-    const splitIndex = Math.ceil(chars.length / 2);
+    const charsPerRow = Math.ceil(chars.length / 3);
 
     chars.forEach((ch, index) => {
         const span = document.createElement("span");
@@ -23,7 +59,7 @@ function buildValidCharsDisplay() {
         span.textContent = ch === " " ? "\u00A0" : ch;
         validCharsEl.appendChild(span);
 
-        if (index === splitIndex - 1) {
+        if ((index + 1) % charsPerRow === 0 && index < chars.length - 1) {
             validCharsEl.appendChild(document.createElement("br"));
         }
     });
@@ -47,34 +83,33 @@ function highlightChar(ch) {
 }
 
 function updateHighlights() {
-    const currentValue = inputEl.value.toUpperCase();
+    const currentValue = getInputValue().toUpperCase();
     const previousUpper = previousValue.toUpperCase();
-    
+
     for (let i = 0; i < currentValue.length; i++) {
         const ch = currentValue[i];
         if (i >= previousUpper.length || ch !== previousUpper[i]) {
             highlightChar(ch);
         }
     }
-    
-    previousValue = inputEl.value;
+
+    previousValue = getInputValue();
 }
 
 function filterInput() {
-    const filtered = [...inputEl.value]
+    const currentValue = getInputValue();
+    const filtered = [...currentValue]
         .filter((ch) => validSet.has(ch.toUpperCase()))
         .join("")
         .toUpperCase();
 
-    if (filtered !== inputEl.value) {
-        inputEl.value = filtered;
-    }
+    renderInputText(filtered);
     updateHighlights();
     updateCharCount();
 }
 
 function updateCharCount() {
-    const count = inputEl.value.length;
+    const count = getInputValue().length;
     charCountEl.textContent = count > 0 ? count + " characters" : "";
 }
 
@@ -93,7 +128,7 @@ function showStatus(text, type) {
 }
 
 async function sendMessage() {
-    const payload = inputEl.value.trim();
+    const payload = getInputValue().trim();
     if (!payload) return;
 
     try {
@@ -104,7 +139,7 @@ async function sendMessage() {
         });
         if (res.ok) {
             showStatus("\u2713 Sent", "success");
-            inputEl.value = "";
+            renderInputText("");
             previousValue = "";
             updateCharCount();
         } else {
@@ -116,12 +151,28 @@ async function sendMessage() {
     }
 }
 
+function renderDisplayText(payload) {
+    const normalizedPayload = normalizeInputText(payload);
+    displayText.innerHTML = "";
+    const chars = Array.from(normalizedPayload || "");
+    const fragment = document.createDocumentFragment();
+
+    chars.forEach((ch) => {
+        const span = document.createElement("span");
+        span.className = "display-char";
+        span.textContent = ch === " " ? "\u00A0" : ch;
+        fragment.appendChild(span);
+    });
+
+    displayText.appendChild(fragment);
+}
+
 function connectSSE() {
     const source = new EventSource("/api/stream");
 
     source.addEventListener("message", (event) => {
         const data = JSON.parse(event.data);
-        displayText.textContent = data.payload;
+        renderDisplayText(data.payload);
         displayLine.classList.remove("hidden");
     });
 

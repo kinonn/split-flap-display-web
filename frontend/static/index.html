@@ -20,14 +20,15 @@
         <div id="valid-chars" class="valid-chars"></div>
 
         <div class="input-wrapper">
-            <input
-                type="text"
+            <div
                 id="message-input"
                 class="message-input"
-                placeholder="Type your message..."
+                contenteditable="true"
+                spellcheck="false"
+                data-placeholder="Type your message..."
                 autocomplete="off"
                 autofocus
-            >
+            ></div>
         </div>
 
         <div id="char-count" class="char-count"></div>
