@@ -1,10 +1,12 @@
 import asyncio
 import json
 import logging
+from collections import deque
 from contextlib import asynccontextmanager
+from datetime import datetime
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from sse_starlette.sse import EventSourceResponse
@@ -20,6 +22,8 @@ logging.getLogger("uvicorn.error").setLevel(logging.WARNING)
 logging.getLogger("mqtt").setLevel(logging.ERROR)
 
 logger = logging.getLogger(__name__)
+
+sent_messages = deque(maxlen=10)
 
 STATIC_DIR = Path(__file__).resolve().parent.parent.parent / "frontend" / "static"
 
@@ -56,12 +60,23 @@ async def get_config():
 
 
 @app.post("/api/publish")
-async def publish(req: PublishRequest):
+async def publish(req: PublishRequest, request: Request):
     topic = req.topic or settings.publish_topic
     try:
         await mqtt_client.publish(topic, req.payload, req.qos)
     except RuntimeError as e:
         raise HTTPException(status_code=503, detail=str(e))
+    
+    user_email = request.headers.get("Cf-Access-Authenticated-User-Email", "")
+    user = user_email.split("@")[0] if user_email else "unknown"
+    timestamp = datetime.now().strftime("%H:%M")
+    
+    sent_messages.appendleft({
+        "time": timestamp,
+        "user": user,
+        "message": req.payload
+    })
+    
     return {"status": "ok", "topic": topic}
 
 
@@ -79,6 +94,11 @@ async def stream():
             raise
 
     return EventSourceResponse(event_generator())
+
+
+@app.get("/api/history")
+async def history():
+    return list(sent_messages)
 
 
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")

@@ -5,8 +5,8 @@ const validCharsEl = document.getElementById("valid-chars");
 const inputEl = document.getElementById("message-input");
 const displayLine = document.getElementById("display-line");
 const displayText = document.getElementById("display-text");
-const sendStatus = document.getElementById("send-status");
 const charCountEl = document.getElementById("char-count");
+const messageHistoryEl = document.getElementById("message-history");
 
 function normalizeInputText(value) {
     return (value || "").replace(/\u00A0/g, " ");
@@ -113,16 +113,77 @@ function updateCharCount() {
     charCountEl.textContent = count > 0 ? count + " characters" : "";
 }
 
+async function loadMessageHistory() {
+    try {
+        const res = await fetch("/api/history");
+        if (res.ok) {
+            const messages = await res.json();
+            renderMessageHistory(messages);
+        }
+    } catch (err) {
+        console.error("Failed to load message history:", err);
+    }
+}
+
+function renderMessageHistory(messages) {
+    if (!messages || messages.length === 0) {
+        messageHistoryEl.innerHTML = "";
+        return;
+    }
+
+    const table = document.createElement("table");
+    table.className = "history-table";
+
+    const thead = document.createElement("thead");
+    thead.innerHTML = `
+        <tr>
+            <th>Time</th>
+            <th>User</th>
+            <th>Message</th>
+        </tr>
+    `;
+    table.appendChild(thead);
+
+    const tbody = document.createElement("tbody");
+    messages.forEach((msg) => {
+        const row = document.createElement("tr");
+
+        const timeCell = document.createElement("td");
+        timeCell.textContent = msg.time;
+
+        const userCell = document.createElement("td");
+        userCell.textContent = msg.user;
+
+        const messageCell = document.createElement("td");
+        const chars = Array.from(msg.message || "");
+        chars.forEach((ch) => {
+            const span = document.createElement("span");
+            span.className = "display-char";
+            span.textContent = ch === " " ? "\u00A0" : ch;
+            messageCell.appendChild(span);
+        });
+
+        row.appendChild(timeCell);
+        row.appendChild(userCell);
+        row.appendChild(messageCell);
+        tbody.appendChild(row);
+    });
+    table.appendChild(tbody);
+
+    messageHistoryEl.innerHTML = "";
+    messageHistoryEl.appendChild(table);
+}
+
 let statusTimeout;
 
 function showStatus(text, type) {
     clearTimeout(statusTimeout);
-    sendStatus.textContent = text;
-    sendStatus.className = "send-status " + type;
+    charCountEl.textContent = text;
+    charCountEl.className = "char-count " + type;
     if (text) {
         statusTimeout = setTimeout(() => {
-            sendStatus.textContent = "";
-            sendStatus.className = "send-status";
+            charCountEl.className = "char-count";
+            updateCharCount();
         }, 3000);
     }
 }
@@ -138,10 +199,10 @@ async function sendMessage() {
             body: JSON.stringify({ payload }),
         });
         if (res.ok) {
-            showStatus("\u2713 Sent", "success");
             renderInputText("");
             previousValue = "";
-            updateCharCount();
+            showStatus("\u2713 Sent", "success");
+            loadMessageHistory();
         } else {
             const data = await res.json();
             showStatus("Error: " + (data.detail || res.statusText), "error");
@@ -192,3 +253,4 @@ inputEl.addEventListener("keydown", (e) => {
 
 buildValidCharsDisplay();
 connectSSE();
+loadMessageHistory();
