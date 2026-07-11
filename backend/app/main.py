@@ -15,10 +15,10 @@ from .config import settings
 from .models import PublishRequest
 from .mqtt_client import mqtt_client
 
-logging.basicConfig(level=logging.WARNING)
-logging.getLogger("backend.app").setLevel(logging.INFO)
+logging.basicConfig(level=logging.ERROR)
+logging.getLogger("backend.app").setLevel(logging.ERROR)
 logging.getLogger("uvicorn.access").setLevel(logging.ERROR)
-logging.getLogger("uvicorn.error").setLevel(logging.WARNING)
+logging.getLogger("uvicorn.error").setLevel(logging.ERROR)
 logging.getLogger("mqtt").setLevel(logging.ERROR)
 
 logger = logging.getLogger(__name__)
