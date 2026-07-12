@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     subscribe_topic: str = "splitflap/splitflap/state"
 
     default_display_duration: int = 10
-    default_target_display_count: int = 3
+    default_target_display_count: int = 6
     idle_message: str = "WELCOME"
     idle_mode: str = "publish"
     idle_publish_interval: int = 10

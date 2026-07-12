@@ -10,7 +10,6 @@ const messageHistoryEl = document.getElementById("message-history");
 const queueListEl = document.getElementById("queue-list");
 const currentMsgEl = document.getElementById("current-msg");
 const stateBadgeEl = document.getElementById("state-badge");
-const advancedForm = document.getElementById("advanced-form");
 
 function normalizeInputText(value) {
     return (value || "").replace(/\u00A0/g, " ");
@@ -50,6 +49,11 @@ function renderInputText(value) {
 
 let previousValue = "";
 const fadeTimers = new Map();
+
+// Authoritative state, kept in sync with the server via SSE.
+let lastCurrent = null;
+let lastQueue = [];
+let lastHistory = [];
 
 function buildValidCharsDisplay() {
     validCharsEl.innerHTML = "";
@@ -131,19 +135,8 @@ function renderDisplayChars(targetEl, text) {
     targetEl.appendChild(fragment);
 }
 
-async function loadMessageHistory() {
-    try {
-        const res = await fetch("/api/history");
-        if (res.ok) {
-            const messages = await res.json();
-            renderMessageHistory(messages);
-        }
-    } catch (err) {
-        console.error("Failed to load message history:", err);
-    }
-}
-
 function renderMessageHistory(messages) {
+    lastHistory = messages || [];
     if (!messages || messages.length === 0) {
         messageHistoryEl.innerHTML = "";
         return;
@@ -212,7 +205,8 @@ async function sendMessage(payload, priority) {
             previousValue = "";
             priorityToggleEl.checked = false;
             showStatus("\u2713 Queued", "success");
-            loadMessageHistory();
+            // No need to refetch — the server's SSE `queue` and `history`
+            // events will deliver the new state.
         } else {
             const data = await res.json().catch(() => ({}));
             showStatus("Error: " + (data.detail || res.statusText), "error");
@@ -229,55 +223,15 @@ quickSendForm.addEventListener("submit", (e) => {
     sendMessage(payload, priority);
 });
 
-advancedForm.addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const fd = new FormData(advancedForm);
-    const body = {
-        text: (fd.get("text") || "").toString().trim(),
-        priority: (fd.get("priority") || "normal").toString(),
-    };
-    const tdc = fd.get("targetDisplayCount");
-    const dur = fd.get("displayDuration");
-    if (tdc) body.targetDisplayCount = parseInt(tdc, 10);
-    if (dur) body.displayDuration = parseInt(dur, 10);
-    if (!body.text) return;
-    try {
-        const res = await fetch("/api/messages", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(body),
-        });
-        if (res.ok) {
-            advancedForm.reset();
-            showStatus("\u2713 Added", "success");
-        } else {
-            const data = await res.json().catch(() => ({}));
-            showStatus("Error: " + (data.detail || res.statusText), "error");
-        }
-    } catch (err) {
-        showStatus("Error: " + err.message, "error");
-    }
-});
-
-async function loadQueue() {
-    try {
-        const res = await fetch("/api/messages");
-        if (res.ok) {
-            const messages = await res.json();
-            renderQueue(messages);
-        }
-    } catch (err) {
-        console.error("Failed to load queue:", err);
-    }
-}
-
 function renderQueue(messages) {
+    lastQueue = messages || [];
     queueListEl.innerHTML = "";
     if (!messages || messages.length === 0) {
         const li = document.createElement("li");
         li.className = "queue-empty";
         li.textContent = "Queue is empty.";
         queueListEl.appendChild(li);
+        recomputeState();
         return;
     }
 
@@ -311,33 +265,37 @@ function renderQueue(messages) {
         li.appendChild(removeBtn);
         queueListEl.appendChild(li);
     });
+    recomputeState();
 }
 
 async function removeMessage(id) {
     try {
         const res = await fetch(`/api/messages/${id}`, { method: "DELETE" });
-        if (res.ok) {
-            loadQueue();
-        } else {
+        if (!res.ok) {
             const data = await res.json().catch(() => ({}));
             showStatus("Error: " + (data.detail || res.statusText), "error");
         }
+        // On success, the server pushes a `queue` SSE event with the new
+        // snapshot — no explicit refresh needed.
     } catch (err) {
         showStatus("Error: " + err.message, "error");
     }
 }
 
 function updateCurrent(message) {
+    lastCurrent = message;
     if (message) {
         renderDisplayChars(currentMsgEl, message.message);
     } else {
         currentMsgEl.textContent = "\u2014";
     }
+    recomputeState();
 }
 
-function updateState(state, currentMessage) {
+function recomputeState() {
+    const active = lastCurrent !== null || (lastQueue && lastQueue.length > 0);
     stateBadgeEl.classList.remove("state-idle", "state-active");
-    if (state === "Active" && currentMessage) {
+    if (active) {
         stateBadgeEl.classList.add("state-active");
         stateBadgeEl.textContent = "Active";
     } else {
@@ -353,14 +311,27 @@ function connectSchedulerSSE() {
         try {
             const data = JSON.parse(event.data);
             updateCurrent(data.message);
-            updateState(data.message ? "Active" : "Idle", data.message);
         } catch (e) {
             console.error("Bad current event:", e);
         }
     });
 
-    source.addEventListener("queue", () => {
-        loadQueue();
+    source.addEventListener("queue", (event) => {
+        try {
+            const data = JSON.parse(event.data);
+            renderQueue(data.messages || []);
+        } catch (e) {
+            console.error("Bad queue event:", e);
+        }
+    });
+
+    source.addEventListener("history", (event) => {
+        try {
+            const data = JSON.parse(event.data);
+            renderMessageHistory(data.messages || []);
+        } catch (e) {
+            console.error("Bad history event:", e);
+        }
     });
 
     source.onerror = () => {
@@ -381,5 +352,3 @@ inputEl.addEventListener("keydown", (e) => {
 
 buildValidCharsDisplay();
 connectSchedulerSSE();
-loadQueue();
-loadMessageHistory();

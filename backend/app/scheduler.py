@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import uuid
+from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
@@ -11,6 +12,9 @@ if TYPE_CHECKING:
 
 
 logger = logging.getLogger(__name__)
+
+
+MAX_HISTORY = 50
 
 
 class MessageStatus(str, Enum):
@@ -114,6 +118,39 @@ class Scheduler:
 
         self._subscribers: set[asyncio.Queue] = set()
 
+        # History of sent messages (most recent first). Each entry is a dict
+        # with shape: {id, time, user, message, priority}.
+        self._history: deque = deque(maxlen=MAX_HISTORY)
+
+    # ---- Snapshot helpers ----
+
+    def _queue_snapshot(self) -> list[dict]:
+        active = [m for m in self._store._messages.values() if m.status != MessageStatus.COMPLETED]
+        active.sort(key=lambda m: (
+            0 if m.priority == "high" else 1,
+            m.display_count,
+            m.created_at,
+        ))
+        return [m.to_dict() for m in active]
+
+    def _history_snapshot(self) -> list[dict]:
+        return list(self._history)
+
+    def _current_snapshot(self) -> Optional[dict]:
+        return self._current.to_dict() if self._current is not None else None
+
+    def get_active_messages(self) -> list[Message]:
+        return [m for m in self._store._messages.values() if m.status != MessageStatus.COMPLETED]
+
+    def get_all_messages(self) -> list[Message]:
+        return list(self._store._messages.values())
+
+    def get_history(self) -> list[dict]:
+        return list(self._history)
+
+    def get_current_message(self) -> Optional[Message]:
+        return self._current
+
     # ---- Public API (spec §14) ----
 
     async def add_message(
@@ -122,6 +159,7 @@ class Scheduler:
         target_display_count: Optional[int] = None,
         display_duration: Optional[int] = None,
         priority: Priority = "normal",
+        user: str = "unknown",
     ) -> uuid.UUID:
         if not text or not text.strip():
             raise ValueError("text must be non-empty")
@@ -148,24 +186,23 @@ class Scheduler:
             priority=priority,
         )
         await self._store.add(msg)
+        self._history.appendleft({
+            "id": str(msg.id),
+            "time": msg.created_at.strftime("%H:%M"),
+            "user": user,
+            "message": text,
+            "priority": priority,
+        })
         self._wakeup.set()
-        self._notify({"type": "queue", "message": msg.to_dict()})
+        self._notify({"type": "queue", "messages": self._queue_snapshot()})
+        self._notify({"type": "history", "messages": self._history_snapshot()})
         return msg.id
 
     async def remove_message(self, message_id: uuid.UUID) -> bool:
         ok = await self._store.mark_completed(message_id)
         if ok:
-            self._notify({"type": "queue", "removed": str(message_id)})
+            self._notify({"type": "queue", "messages": self._queue_snapshot()})
         return ok
-
-    def get_active_messages(self) -> list[Message]:
-        return [m for m in self._store._messages.values() if m.status != MessageStatus.COMPLETED]
-
-    def get_all_messages(self) -> list[Message]:
-        return list(self._store._messages.values())
-
-    def get_current_message(self) -> Optional[Message]:
-        return self._current
 
     def select_next_message(self) -> Optional[Message]:
         candidates = [
@@ -247,9 +284,6 @@ class Scheduler:
         next_msg.last_displayed_at = datetime.now()
         self._notify({"type": "current", "message": next_msg.to_dict()})
 
-        # Full displayDuration — no early wake (spec §9).
-        await asyncio.sleep(next_msg.display_duration)
-
         async with self._lock:
             next_msg.display_count += 1
             if next_msg.display_count >= 1 and next_msg.status == MessageStatus.PENDING:
@@ -259,8 +293,11 @@ class Scheduler:
                 next_msg.status = MessageStatus.COMPLETED
                 self._current = None
 
+        # Full displayDuration — no early wake (spec §9).
+        await asyncio.sleep(next_msg.display_duration)
+
         self._notify({"type": "current", "message": self._current.to_dict() if self._current else None})
-        self._notify({"type": "queue", "message": next_msg.to_dict()})
+        self._notify({"type": "queue", "messages": self._queue_snapshot()})
 
     async def _handle_idle(self) -> None:
         if self._current is not None:
@@ -294,6 +331,20 @@ class Scheduler:
 
     def subscribe_queue(self) -> asyncio.Queue:
         q: asyncio.Queue = asyncio.Queue(maxsize=500)
+        # Seed the new subscriber with the current state so the client can
+        # render immediately on connect.
+        try:
+            q.put_nowait({"type": "current", "message": self._current_snapshot()})
+        except asyncio.QueueFull:
+            pass
+        try:
+            q.put_nowait({"type": "queue", "messages": self._queue_snapshot()})
+        except asyncio.QueueFull:
+            pass
+        try:
+            q.put_nowait({"type": "history", "messages": self._history_snapshot()})
+        except asyncio.QueueFull:
+            pass
         self._subscribers.add(q)
         return q
 

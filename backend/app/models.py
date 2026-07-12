@@ -8,14 +8,8 @@ PriorityStr = Literal["normal", "high"]
 
 
 class PublishRequest(BaseModel):
-    payload: str
-    topic: Optional[str] = None
-    qos: int = 0
-    priority: PriorityStr = "normal"
-
-
-class AddMessageRequest(BaseModel):
-    text: str
+    text: Optional[str] = None
+    payload: Optional[str] = None
     target_display_count: Optional[int] = None
     display_duration: Optional[int] = None
     priority: PriorityStr = "normal"

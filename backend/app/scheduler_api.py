@@ -7,7 +7,6 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException
 from sse_starlette.sse import EventSourceResponse
 
-from .models import AddMessageRequest
 from .mqtt_client import mqtt_client
 from .scheduler import Scheduler
 
@@ -32,43 +31,10 @@ def _get() -> Scheduler:
     return _scheduler
 
 
-@router.get("/api/messages")
-async def list_active():
-    msgs = _get().get_active_messages()
-    return [m.to_dict() for m in sorted(
-        msgs,
-        key=lambda m: (
-            0 if m.priority == "high" else 1,
-            m.display_count,
-            m.created_at,
-        ),
-    )]
-
-
-@router.get("/api/messages/all")
-async def list_all():
-    msgs = _get().get_all_messages()
-    return [m.to_dict() for m in sorted(msgs, key=lambda m: m.created_at, reverse=True)]
-
-
 @router.get("/api/messages/current")
 async def current():
     m = _get().get_current_message()
     return m.to_dict() if m else None
-
-
-@router.post("/api/messages")
-async def add(req: AddMessageRequest):
-    try:
-        mid = await _get().add_message(
-            text=req.text,
-            target_display_count=req.target_display_count,
-            display_duration=req.display_duration,
-            priority=req.priority,
-        )
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    return {"id": str(mid)}
 
 
 @router.delete("/api/messages/{message_id}")

@@ -1,8 +1,6 @@
 import asyncio
 import logging
-from collections import deque
 from contextlib import asynccontextmanager
-from datetime import datetime
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
@@ -22,8 +20,6 @@ logging.getLogger("uvicorn.error").setLevel(logging.ERROR)
 logging.getLogger("mqtt").setLevel(logging.ERROR)
 
 logger = logging.getLogger(__name__)
-
-sent_messages = deque(maxlen=500)
 
 STATIC_DIR = Path(__file__).resolve().parent.parent.parent / "frontend" / "static"
 
@@ -94,30 +90,25 @@ async def get_config():
 async def publish(req: PublishRequest, request: Request):
     if scheduler is None:
         raise HTTPException(status_code=503, detail="scheduler not ready")
+    text = (req.text or req.payload or "").strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="text must be non-empty")
+
+    user_email = request.headers.get("Cf-Access-Authenticated-User-Email", "")
+    user = user_email.split("@")[0] if user_email else "unknown"
+
     try:
         mid = await scheduler.add_message(
-            text=req.payload,
-            target_display_count=None,
-            display_duration=None,
+            text=text,
+            target_display_count=req.target_display_count,
+            display_duration=req.display_duration,
             priority=req.priority,
+            user=user,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-    user_email = request.headers.get("Cf-Access-Authenticated-User-Email", "")
-    user = user_email.split("@")[0] if user_email else "unknown"
-    sent_messages.appendleft({
-        "time": datetime.now().strftime("%H:%M"),
-        "user": user,
-        "message": req.payload,
-        "priority": req.priority,
-    })
     return {"status": "ok", "id": str(mid)}
-
-
-@app.get("/api/history")
-async def history():
-    return list(sent_messages)
 
 
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")

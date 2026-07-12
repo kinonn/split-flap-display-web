@@ -39,7 +39,8 @@
             <div class="quick-send-controls">
                 <label class="priority-toggle">
                     <input type="checkbox" id="priority-toggle" />
-                    <span>High priority</span>
+                    <span class="priority-slider"></span>
+                    <span class="priority-toggle-label">High priority</span>
                 </label>
                 <button type="submit" class="queue-btn">Queue message</button>
             </div>
@@ -47,25 +48,11 @@
         </form>
 
         <section id="admin" class="admin">
-            <h2 class="admin-title">Queue</h2>
+            <h2 class="admin-title">Messages in Queue</h2>
             <ul id="queue-list" class="queue-list"></ul>
 
-            <details id="advanced-add" class="advanced-add">
-                <summary>Add with custom settings</summary>
-                <form id="advanced-form" class="advanced-form">
-                    <input name="text" type="text" placeholder="Message text" required />
-                    <input name="targetDisplayCount" type="number" min="1" placeholder="Target count" />
-                    <input name="displayDuration" type="number" min="1" placeholder="Duration (s)" />
-                    <select name="priority">
-                        <option value="normal" selected>Normal</option>
-                        <option value="high">High</option>
-                    </select>
-                    <button type="submit">Add</button>
-                </form>
-            </details>
-
             <details id="history-details" class="advanced-add">
-                <summary>Recent submissions</summary>
+                <summary>Message history</summary>
                 <ul id="message-history" class="message-history"></ul>
             </details>
         </section>

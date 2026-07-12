@@ -95,11 +95,15 @@ class AddMessageTests(AsyncTestCase):
         s, _ = self._make_scheduler()
         q = s.subscribe_queue()
         try:
+            # Drain the seeded snapshots.
+            for _ in range(3):
+                await asyncio.wait_for(q.get(), timeout=0.5)
             mid = await s.add_message("HELLO", priority="high")
             evt = await asyncio.wait_for(q.get(), timeout=0.5)
             self.assertEqual(evt["type"], "queue")
-            self.assertEqual(evt["message"]["id"], str(mid))
-            self.assertEqual(evt["message"]["priority"], "high")
+            ids = [m["id"] for m in evt["messages"]]
+            self.assertIn(str(mid), ids)
+            self.assertEqual(evt["messages"][0]["priority"], "high")
         finally:
             s.unsubscribe_queue(q)
 
@@ -128,13 +132,18 @@ class RemoveMessageTests(AsyncTestCase):
         s, _ = self._make_scheduler()
         q = s.subscribe_queue()
         try:
+            # Drain the seeded snapshots.
+            for _ in range(3):
+                await asyncio.wait_for(q.get(), timeout=0.5)
             mid = await s.add_message("X")
-            # Drain the add event
-            await asyncio.wait_for(q.get(), timeout=0.5)
+            # Drain the two add events.
+            for _ in range(2):
+                await asyncio.wait_for(q.get(), timeout=0.5)
             await s.remove_message(mid)
             evt = await asyncio.wait_for(q.get(), timeout=0.5)
             self.assertEqual(evt["type"], "queue")
-            self.assertEqual(evt["removed"], str(mid))
+            ids = [m["id"] for m in evt["messages"]]
+            self.assertNotIn(str(mid), ids)
         finally:
             s.unsubscribe_queue(q)
 
