@@ -177,6 +177,40 @@ class SchedulerTickTests(AsyncTestCase):
         # First published must be the high-priority one.
         self.assertEqual(mqtt.published[-1][1], "B")
 
+    async def test_queue_snapshot_emitted_before_dwell(self):
+        """The queue snapshot must reflect the new displayCount immediately
+        after a successful publish, not after the display_duration sleep.
+        """
+        s, mqtt = self._make_scheduler(
+            default_display_duration=0.05,
+            default_target_display_count=3,
+        )
+        # Subscribe BEFORE adding so the add events are delivered.
+        q = s.subscribe_queue()
+        try:
+            # Drain the seeded snapshots (current, queue, history).
+            for _ in range(3):
+                await asyncio.wait_for(q.get(), timeout=1.0)
+            mid = await s.add_message("HELLO")
+            # Drain the two add events (queue + history).
+            for _ in range(2):
+                await asyncio.wait_for(q.get(), timeout=1.0)
+            # Run the full tick to completion (publish + sleep + finish).
+            await s.scheduler_tick()
+            # Now drain every event the tick emitted and find the queue
+            # snapshot. The snapshot must show displayCount=1 — proving it
+            # was emitted before the sleep, not after.
+            queue_events = []
+            while not q.empty():
+                evt = q.get_nowait()
+                if evt["type"] == "queue":
+                    queue_events.append(evt)
+            self.assertEqual(len(queue_events), 1)
+            msg_dict = next(m for m in queue_events[0]["messages"] if m["id"] == str(mid))
+            self.assertEqual(msg_dict["displayCount"], 1)
+        finally:
+            s.unsubscribe_queue(q)
+
 
 class IdleHandlerTests(AsyncTestCase):
 

@@ -292,12 +292,14 @@ class Scheduler:
             if completed:
                 next_msg.status = MessageStatus.COMPLETED
                 self._current = None
+            # Emit the queue snapshot right after the count is bumped so
+            # the UI sees the new count immediately, not after the dwell.
+            self._notify({"type": "queue", "messages": self._queue_snapshot()})
 
         # Full displayDuration — no early wake (spec §9).
         await asyncio.sleep(next_msg.display_duration)
 
         self._notify({"type": "current", "message": self._current.to_dict() if self._current else None})
-        self._notify({"type": "queue", "messages": self._queue_snapshot()})
 
     async def _handle_idle(self) -> None:
         if self._current is not None:
