@@ -1,6 +1,6 @@
 ﻿# Home Split Flap Display - Web Interface
 
-A clean, Google-inspired web interface for controlling a split-flap display via MQTT.
+A simple web interface for sending messages to a split-flap display via MQTT.
 The single page lets anyone queue a message, watch the live display state, and
 manage the queue (view, remove, and inspect message history) in one place.
 
