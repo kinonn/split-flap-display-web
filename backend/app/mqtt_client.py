@@ -43,15 +43,21 @@ class MQTTClient:
     def unsubscribe_queue(self, q: asyncio.Queue):
         self._subscribers.discard(q)
 
-    def subscribe_current(self) -> asyncio.Queue:
-        """Subscribe to "current" events when the displayed message changes."""
+    def subscribe_display_state(self) -> asyncio.Queue:
+        """Subscribe to "display-state" events when the display reports its
+        actual state (splitflap/splitflap/state topic).
+
+        These events reflect what the physical display is showing, distinct
+        from the scheduler's "current" event which tracks what the scheduler
+        most recently published.
+        """
         q: asyncio.Queue = asyncio.Queue(maxsize=100)
         if self._latest_message is not None:
-            q.put_nowait({"type": "current", "message": {"message": self._latest_message}})
+            q.put_nowait({"type": "display-state", "message": {"message": self._latest_message}})
         self._current_subscribers.add(q)
         return q
 
-    def unsubscribe_current(self, q: asyncio.Queue) -> None:
+    def unsubscribe_display_state(self, q: asyncio.Queue) -> None:
         self._current_subscribers.discard(q)
 
     async def start(self):
@@ -91,17 +97,18 @@ class MQTTClient:
                             self._latest_message = payload
                             msg = {"topic": str(message.topic), "payload": payload}
                             self._history.append(msg)
-                            # Notify "current" subscribers that the displayed message changed
+                            # Notify "display-state" subscribers that the
+                            # physical display reported a new state.
                             for q in list(self._current_subscribers):
                                 try:
-                                    q.put_nowait({"type": "current", "message": {"message": payload}})
+                                    q.put_nowait({"type": "display-state", "message": {"message": payload}})
                                 except asyncio.QueueFull:
                                     try:
                                         q.get_nowait()
                                     except asyncio.QueueEmpty:
                                         pass
                                     try:
-                                        q.put_nowait({"type": "current", "message": {"message": payload}})
+                                        q.put_nowait({"type": "display-state", "message": {"message": payload}})
                                     except asyncio.QueueFull:
                                         pass
                             for q in list(self._subscribers):

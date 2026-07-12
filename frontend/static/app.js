@@ -54,6 +54,11 @@ const fadeTimers = new Map();
 let lastCurrent = null;
 let lastQueue = [];
 let lastHistory = [];
+// Last payload reported by the physical display via the
+// splitflap/splitflap/state MQTT topic. This drives the "Now showing"
+// text so it reflects what the display is *actually* showing, including
+// while the scheduler is IDLE.
+let lastDisplayState = null;
 
 function buildValidCharsDisplay() {
     validCharsEl.innerHTML = "";
@@ -284,12 +289,19 @@ async function removeMessage(id) {
 
 function updateCurrent(message) {
     lastCurrent = message;
-    if (message) {
-        renderDisplayChars(currentMsgEl, message.message);
-    } else {
-        currentMsgEl.textContent = "\u2014";
-    }
+    // NOTE: we intentionally do NOT touch currentMsgEl here. The "Now
+    // showing" text is driven by `updateDisplayState` (the
+    // splitflap/splitflap/state feedback) so it persists across IDLE
+    // transitions instead of being overwritten by the em-dash.
     recomputeState();
+}
+
+function updateDisplayState(payload) {
+    if (typeof payload !== "string") {
+        return;
+    }
+    lastDisplayState = payload;
+    renderDisplayChars(currentMsgEl, payload);
 }
 
 function recomputeState() {
@@ -313,6 +325,18 @@ function connectSchedulerSSE() {
             updateCurrent(data.message);
         } catch (e) {
             console.error("Bad current event:", e);
+        }
+    });
+
+    source.addEventListener("display-state", (event) => {
+        try {
+            const data = JSON.parse(event.data);
+            // Wire format: {type: "display-state", message: {message: <payload>}}
+            if (data && data.message && typeof data.message.message === "string") {
+                updateDisplayState(data.message.message);
+            }
+        } catch (e) {
+            console.error("Bad display-state event:", e);
         }
     });
 

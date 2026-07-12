@@ -63,12 +63,16 @@ async def status():
 @router.get("/api/scheduler/stream")
 async def stream():
     scheduler_q = _get().subscribe_queue()
-    mqtt_q = mqtt_client.subscribe_current()
+    mqtt_q = mqtt_client.subscribe_display_state()
 
     async def event_generator():
         try:
             while True:
-                # Wait for events from either the scheduler queue or the MQTT current queue
+                # Wait for events from either the scheduler queue or the
+                # MQTT display-state queue. The two event streams are kept
+                # separate on the wire (different SSE event names) so the
+                # client can distinguish scheduler-published "current"
+                # messages from display-reported "display-state" messages.
                 done, _ = await asyncio.wait(
                     [
                         asyncio.create_task(scheduler_q.get()),
@@ -81,7 +85,7 @@ async def stream():
                     yield {"event": evt.get("type", "message"), "data": json.dumps(evt)}
         except asyncio.CancelledError:
             _get().unsubscribe_queue(scheduler_q)
-            mqtt_client.unsubscribe_current(mqtt_q)
+            mqtt_client.unsubscribe_display_state(mqtt_q)
             raise
 
     return EventSourceResponse(event_generator())
