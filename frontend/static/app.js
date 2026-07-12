@@ -150,7 +150,7 @@ function renderMessageHistory(messages) {
     const fragment = document.createDocumentFragment();
     messages.forEach((msg) => {
         const li = document.createElement("li");
-        li.className = "history-item";
+        li.className = "history-item" + (msg.priority === "high" ? " history-item-high" : "");
 
         const timeEl = document.createElement("span");
         timeEl.className = "history-time";
@@ -244,13 +244,21 @@ function renderQueue(messages) {
         const li = document.createElement("li");
         li.className = "queue-item" + (m.priority === "high" ? " queue-item-high" : "");
 
+        const timeEl = document.createElement("span");
+        timeEl.className = "queue-time";
+        timeEl.textContent = m.lastDisplayedTime || "\u2014";
+
+        const userEl = document.createElement("span");
+        userEl.className = "queue-user";
+        userEl.textContent = m.user || "unknown";
+
         const textEl = document.createElement("span");
         textEl.className = "queue-msg";
-        textEl.textContent = m.message;
+        renderDisplayChars(textEl, m.message);
 
         const metaEl = document.createElement("span");
         metaEl.className = "queue-meta";
-        metaEl.textContent = `${m.displayCount}/${m.targetDisplayCount} · ${m.status}`;
+        metaEl.textContent = `${m.displayCount}/${m.targetDisplayCount} \u00b7 ${m.status}`;
 
         const removeBtn = document.createElement("button");
         removeBtn.type = "button";
@@ -259,6 +267,8 @@ function renderQueue(messages) {
         removeBtn.title = "Remove from queue";
         removeBtn.addEventListener("click", () => removeMessage(m.id));
 
+        li.appendChild(timeEl);
+        li.appendChild(userEl);
         li.appendChild(textEl);
         if (m.priority === "high") {
             const badge = document.createElement("span");

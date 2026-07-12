@@ -23,13 +23,15 @@ class MessageTests(AsyncTestCase):
         self.assertEqual(set(d.keys()), {
             "id", "message", "createdAt", "status",
             "displayDuration", "targetDisplayCount",
-            "displayCount", "lastDisplayedAt", "priority",
+            "displayCount", "lastDisplayedAt", "lastDisplayedTime", "priority", "user",
         })
         self.assertEqual(d["message"], "HI")
         self.assertEqual(d["status"], "Pending")
         self.assertEqual(d["displayCount"], 0)
         self.assertIsNone(d["lastDisplayedAt"])
+        self.assertIsNone(d["lastDisplayedTime"])
         self.assertEqual(d["priority"], "normal")
+        self.assertEqual(d["user"], "unknown")
 
     def test_to_dict_serializes_timestamps(self):
         ts = datetime(2026, 1, 2, 3, 4, 5)
@@ -37,6 +39,7 @@ class MessageTests(AsyncTestCase):
         d = m.to_dict()
         self.assertEqual(d["createdAt"], ts.isoformat())
         self.assertEqual(d["lastDisplayedAt"], ts.isoformat())
+        self.assertEqual(d["lastDisplayedTime"], ts.strftime("%H:%M"))
 
 
 class MessageStoreTests(AsyncTestCase):

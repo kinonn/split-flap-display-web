@@ -442,7 +442,7 @@ body {
     padding: 0;
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 4px;
 }
 
 .queue-empty {
@@ -455,31 +455,57 @@ body {
 .queue-item {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 10px 14px;
-    background: #f8f9fa;
-    border: 1px solid #e8eaed;
-    border-radius: 8px;
-    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    gap: 10px;
+    padding: 4px 0 4px 8px;
+    margin-left: -8px;
+    font-size: 0.85rem;
+    color: #5f6368;
+    border-bottom: 1px solid #f1f3f4;
+    border-left: 3px solid #f1f3f4;
+    background: #fcfcfc;
 }
 
 .queue-item-high {
-    border-left: 4px solid #d93025;
+    border-left: 3px solid #d93025;
     background: #fef7f7;
+    padding-left: 8px;
+    margin-left: -8px;
+}
+
+.queue-time {
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    color: #80868b;
+    width: 50px;
+    flex-shrink: 0;
+}
+
+.queue-user {
+    color: #1a73e8;
+    width: 100px;
+    flex-shrink: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .queue-msg {
     flex: 1;
-    font-weight: 700;
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 0.01em;
     color: #202124;
     word-break: break-all;
+}
+
+.queue-msg .display-char {
+    font-size: 0.85rem;
+    padding: 0.05em 0.2em;
 }
 
 .queue-meta {
     font-size: 0.8rem;
     color: #5f6368;
     white-space: nowrap;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 
 .queue-remove {
@@ -547,10 +573,20 @@ body {
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 4px 0;
+    padding: 4px 0 4px 8px;
+    margin-left: -8px;
     font-size: 0.85rem;
     color: #5f6368;
     border-bottom: 1px solid #f1f3f4;
+    border-left: 3px solid #f1f3f4;
+    background: #fcfcfc;
+}
+
+.history-item-high {
+    border-left: 3px solid #d93025;
+    background: #fef7f7;
+    padding-left: 8px;
+    margin-left: -8px;
 }
 
 .history-time {

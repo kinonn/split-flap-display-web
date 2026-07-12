@@ -74,6 +74,7 @@ def make_message(**overrides):
         display_count=0,
         last_displayed_at=None,
         priority="normal",
+        user="unknown",
     )
     defaults.update(overrides)
     return Message(**defaults)

@@ -38,6 +38,7 @@ class Message:
     display_count: int
     last_displayed_at: Optional[datetime]
     priority: Priority = "normal"
+    user: str = "unknown"
 
     def to_dict(self) -> dict:
         return {
@@ -49,7 +50,9 @@ class Message:
             "targetDisplayCount": self.target_display_count,
             "displayCount": self.display_count,
             "lastDisplayedAt": self.last_displayed_at.isoformat() if self.last_displayed_at else None,
+            "lastDisplayedTime": self.last_displayed_at.strftime("%H:%M") if self.last_displayed_at else None,
             "priority": self.priority,
+            "user": self.user,
         }
 
 
@@ -184,6 +187,7 @@ class Scheduler:
             display_count=0,
             last_displayed_at=None,
             priority=priority,
+            user=user,
         )
         await self._store.add(msg)
         self._history.appendleft({
@@ -288,16 +292,21 @@ class Scheduler:
             next_msg.display_count += 1
             if next_msg.display_count >= 1 and next_msg.status == MessageStatus.PENDING:
                 next_msg.status = MessageStatus.ACTIVE
-            completed = next_msg.display_count >= next_msg.target_display_count
-            if completed:
-                next_msg.status = MessageStatus.COMPLETED
-                self._current = None
             # Emit the queue snapshot right after the count is bumped so
             # the UI sees the new count immediately, not after the dwell.
             self._notify({"type": "queue", "messages": self._queue_snapshot()})
 
         # Full displayDuration — no early wake (spec §9).
         await asyncio.sleep(next_msg.display_duration)
+
+        # Mark the message COMPLETED only after the full dwell has elapsed,
+        # so it stays in the queue (visible to the UI) for the entire time
+        # the display is actually showing it.
+        async with self._lock:
+            if next_msg.display_count >= next_msg.target_display_count:
+                next_msg.status = MessageStatus.COMPLETED
+                self._current = None
+                self._notify({"type": "queue", "messages": self._queue_snapshot()})
 
         self._notify({"type": "current", "message": self._current.to_dict() if self._current else None})
 
