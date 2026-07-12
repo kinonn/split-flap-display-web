@@ -1,14 +1,22 @@
-# Home Split Flap Display - Web Interface
+﻿# Home Split Flap Display - Web Interface
 
 A clean, Google-inspired web interface for controlling a split-flap display via MQTT.
+The single page lets anyone queue a message, watch the live display state, and
+manage the queue (view, remove, and inspect message history) in one place.
 
 ## Features
 
-- **Minimal UI**: Google-style homepage with centered title and input
-- **Real-time updates**: Server-Sent Events (SSE) for live display state
-- **Character validation**: Only valid split-flap characters accepted
-- **Visual feedback**: Typed characters highlight in the valid character set
-- **MQTT integration**: Publish commands and subscribe to display state
+- **Single-page UI**: Title, live "Now showing" panel, character picker, queue
+  composer, and queue/history viewer all live on one page (`/`).
+- **Real-time updates**: Server-Sent Events (SSE) push queue, current, and history
+  changes; MQTT feedback from the display drives the "Now showing" text.
+- **Character validation**: Only valid split-flap characters are accepted; typed
+  characters briefly highlight in the valid character set.
+- **Queue management**: View, remove, and inspect the live queue and a rolling
+  message history (last 50 submissions) without leaving the page.
+- **Priority**: Toggle "High priority" to jump the queue.
+- **MQTT integration**: Publishes commands to the display and subscribes to its
+  state topic.
 
 ## Valid Characters
 
@@ -19,27 +27,28 @@ A clean, Google-inspired web interface for controlling a split-flap display via 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────┐
-│  Browser (HTML/JS)                      │
-│  - Queue a message (with priority)      │
-│  - Admin: view/remove queued messages   │
-│  - SSE for live current-message updates │
-└─────────────────┬───────────────────────┘
-                  │ HTTP / SSE
-┌─────────────────▼───────────────────────┐
-│  FastAPI Backend                        │
-│  - Scheduler (queue + rotation)        │
-│  - MQTT client (asyncio-mqtt)           │
-│  - Publish to broker per message        │
-└─────────────────┬───────────────────────┘
-                  │ MQTT (raw string payload)
-┌─────────────────▼───────────────────────┐
-│  External MQTT Broker                   │
-└─────────────────────────────────────────┘
++-----------------------------------------+
+|  Browser (single page: /)               |
+|  - Compose a message (with priority)    |
+|  - View live display state (SSE + MQTT) |
+|  - View & manage the queue              |
+|  - View message history                 |
++--------------------+--------------------+
+                     | HTTP / SSE
++--------------------v--------------------+
+|  FastAPI Backend                        |
+|  - Scheduler (queue + rotation)         |
+|  - MQTT client (asyncio-mqtt)           |
+|  - Publish to broker per message        |
++--------------------+--------------------+
+                     | MQTT (raw string payload)
++--------------------v--------------------+
+|  External MQTT Broker                   |
++-----------------------------------------+
 ```
 
-The scheduler decides which message to send to the display, in what order,
-and for how long. See [Scheduler](#scheduler) below.
+The scheduler is the only component that decides what appears on the display,
+in what order, and for how long. See [Scheduler](#scheduler) below.
 
 ## Quick Start
 
@@ -122,35 +131,31 @@ cd split-flap-display-web
 cp backend/app.conf.example backend/app.conf
 ```
 
-Edit `backend/app.conf` for your environment:
+Edit `backend/app.conf` for your environment. At a minimum, set
+`MQTT_BROKER_HOST` to a hostname or IP address that is reachable from inside
+the app container (see the warning below). See
+[Configuration](#configuration) for the full file and the list of variables.
 
-```env
-MQTT_BROKER_HOST=your-broker.example.com
-MQTT_BROKER_PORT=1883
-
-MQTT_CLIENT_ID=splitflap-web
-PUBLISH_TOPIC=splitflap/splitflap/set
-SUBSCRIBE_TOPIC=splitflap/splitflap/state
-```
-
-> **Important:** When using `docker compose`, set `MQTT_BROKER_HOST` to a hostname or IP address that is reachable from inside the app container. `localhost` points to the container itself.
+> **Important:** When using `docker compose`, `localhost` inside `app.conf`
+> points to the app container itself, not your host. Use the broker's IP or a
+> hostname reachable from inside the Docker network.
 
 ### Step 2: Build the Container
 
 ```bash
 # Build the production image
 docker compose build
-
-# Or build with a specific tag
-docker compose build --build-arg BUILDKIT_INLINE_CACHE=1
-docker tag split-flap-display-web-app:latest split-flap-web:1.0.0
 ```
 
 The Dockerfile uses a multi-stage build:
-1. **Builder stage**: Uses `uv` to resolve and install dependencies into a virtual environment
-2. **Runtime stage**: Minimal `python:3.12-slim` image with only the venv and application code
+
+1. **Builder stage**: Uses `uv` to resolve and install dependencies into a
+   virtual environment.
+2. **Runtime stage**: Minimal `python:3.12-slim` image with only the venv and
+   application code.
 
 Production hardening included:
+
 - Non-root user (`appuser`) for security
 - Health check endpoint (`/api/config`)
 - Single worker (required for SSE + in-memory state)
@@ -158,24 +163,17 @@ Production hardening included:
 ### Step 3: Deploy
 
 ```bash
-# Start all services in detached mode
+# Start the service in detached mode
 docker compose up -d
 
-# Verify services are running
+# Verify the service is running
 docker compose ps
-
-# Expected output:
-# NAME                    STATUS
-# split-flap-web          Up (healthy)
 
 # View logs
 docker compose logs -f
 
-# Stop services
+# Stop
 docker compose down
-
-# Stop and remove volumes
-docker compose down -v
 ```
 
 ### Step 4: Verify Deployment
@@ -184,76 +182,92 @@ docker compose down -v
 # Check application health
 curl http://localhost:8100/api/config
 
-# Test publishing a message
+# Queue a message
 curl -X POST http://localhost:8100/api/publish \
   -H "Content-Type: application/json" \
-  -d '{"payload": "HELLO WORLD"}'
+  -d '{"text": "HELLO WORLD", "priority": "normal"}'
 ```
 
 ### Step 5: Monitoring
 
 **Health Checks:**
-- The app container checks `/api/config` every 30 seconds
-- The app container auto-restarts on failure (`restart: unless-stopped`)
+
+- The app container checks `/api/config` every 30 seconds.
+- The app container auto-restarts on failure (`restart: unless-stopped`).
 
 **Logs:**
+
 ```bash
 # Application logs
 docker compose logs -f app
-
-# All logs
-docker compose logs -f
 ```
 
 **Resource Usage:**
+
 ```bash
 docker stats split-flap-web
 ```
 
 ### Using an External MQTT Broker
 
-The app requires an external MQTT broker. Configure the broker address in `backend/app.conf`:
+The app requires an external MQTT broker. Configure the broker address in
+`backend/app.conf`:
 
 ```env
 MQTT_BROKER_HOST=your-broker.example.com
 MQTT_BROKER_PORT=1883
 ```
 
-> **Note:** `localhost` or `127.0.0.1` refers to the container itself. Use the broker's IP address or a hostname reachable from inside the Docker network. mDNS hostnames (e.g., `rpi41.local`) may not resolve inside containers — use the IP address instead.
+> **Note:** `localhost` or `127.0.0.1` refers to the container itself. Use the
+> broker's IP address or a hostname reachable from inside the Docker network.
+> mDNS hostnames (e.g., `rpi.local`) may not resolve inside containers - use
+> the IP address instead.
 
 ### Architecture Notes
 
 **Single Worker Constraint:**
+
 The application must run with exactly **one uvicorn worker** because:
-- SSE connections are tracked in-memory per worker
-- Message history is stored in a per-process deque
-- Multiple workers would each have independent state, breaking real-time updates
+
+- SSE connections are tracked in-memory per worker.
+- Message history is stored in a per-process deque.
+- Multiple workers would each have independent state, breaking real-time
+  updates.
 
 **In-Memory State:**
-- Message history (up to 500 messages) is not persisted across restarts
-- SSE subscribers are tracked per-process
-- For high-availability, consider externalizing state to Redis
+
+- Message history (up to 50 entries) is not persisted across restarts.
+- SSE subscribers are tracked per-process.
+- For high availability, consider externalizing state to Redis.
 
 ### Resource Limits
 
 Default limits in `docker-compose.yml`:
 
-| Resource | Limit | Reservation |
-|----------|-------|-------------|
-| Memory   | 256 MB | 128 MB |
-| CPU      | 0.5 cores | 0.25 cores |
+| Resource | Limit      | Reservation |
+|----------|------------|-------------|
+| Memory   | 256 MB     | 128 MB      |
+| CPU      | 0.5 cores  | 0.25 cores  |
 
-Adjust based on your load. The app is lightweight; limits can be increased for environments with many concurrent SSE connections.
+Adjust based on your load. The app is lightweight; limits can be increased
+for environments with many concurrent SSE connections.
 
 ### Security Considerations
 
-- The container runs as non-root user `appuser`
-- Expose only port 8100 (web) externally; keep port 1883 (MQTT) internal unless needed
-- Consider adding a reverse proxy (nginx, Caddy) for HTTPS termination
+- The container runs as non-root user `appuser`.
+- Expose only port 8100 (web) externally; keep port 1883 (MQTT) internal unless
+  needed.
+- Consider adding a reverse proxy (nginx, Caddy) for HTTPS termination.
+- The web UI has no built-in authentication. If you expose it beyond a trusted
+  network, put it behind a reverse proxy that enforces auth (the backend
+  honors a `Cf-Access-Authenticated-User-Email` header for per-message user
+  attribution when present).
 
 ## Configuration
 
-Edit `backend/app.conf`:
+The full `backend/app.conf` is shown below. The shipped `backend/app.conf.example`
+is the source of truth for the recommended values; copy it to `backend/app.conf`
+and edit as needed. Any variable can also be supplied via the environment.
 
 ```env
 MQTT_BROKER_HOST=localhost
@@ -262,11 +276,16 @@ MQTT_CLIENT_ID=splitflap-web
 PUBLISH_TOPIC=splitflap/splitflap/set
 SUBSCRIBE_TOPIC=splitflap/splitflap/state
 
+# Scheduler defaults
 DEFAULT_DISPLAY_DURATION=10
 DEFAULT_TARGET_DISPLAY_COUNT=3
+
+# Idle behavior: "publish" publishes IDLE_MESSAGE repeatedly; "keep" leaves the display alone
 IDLE_MODE=publish
 IDLE_MESSAGE=WELCOME
 IDLE_PUBLISH_INTERVAL=10
+
+# Set to false to disable the scheduler loop (e.g. for raw /api/publish only)
 SCHEDULER_ENABLED=true
 ```
 
@@ -286,45 +305,58 @@ SCHEDULER_ENABLED=true
 
 ## API Endpoints
 
+The web UI consumes all of these endpoints. There is no separate admin page;
+the queue, current, and history are all managed from `/`.
+
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET` | `/` | Web interface |
-| `POST` | `/api/publish` | Enqueue a message (optional priority) |
-| `GET` | `/api/messages` | List active (non-completed) messages |
-| `GET` | `/api/messages/all` | List all messages including completed |
-| `GET` | `/api/messages/current` | Currently displayed message |
-| `POST` | `/api/messages` | Enqueue with custom target/duration/priority |
+| `GET` | `/` | Single-page web interface |
+| `GET` | `/static/*` | Frontend assets (JS, CSS) |
+| `GET` | `/api/config` | Current configuration and connection status |
+| `POST` | `/api/publish` | Enqueue a message (with optional priority) |
+| `GET` | `/api/messages/current` | Currently displayed message, if any |
 | `DELETE` | `/api/messages/{id}` | Remove a message from the queue |
-| `GET` | `/api/scheduler/status` | Scheduler state, current, queue size |
-| `GET` | `/api/scheduler/stream` | SSE stream of scheduler events |
-| `GET` | `/api/history` | Recent submissions (who sent what) |
-| `GET` | `/api/config` | Current configuration and status |
+| `GET` | `/api/scheduler/status` | Scheduler state, current, queue size, high-priority count |
+| `GET` | `/api/scheduler/stream` | SSE stream of `current`, `queue`, `history`, and `display-state` events |
+
+Queue and history listings are not exposed as REST endpoints - the server
+pushes them to clients over the SSE stream on every change.
 
 ### POST /api/publish
 
 ```json
 {
-  "payload": "HELLO WORLD",
-  "topic": "splitflap/splitflap/set",
-  "qos": 0,
+  "text": "HELLO WORLD",
   "priority": "normal"
 }
 ```
 
-`priority` is optional and defaults to `"normal"`. Set to `"high"` to jump the queue.
+All fields except `text` are optional:
 
-### POST /api/messages
+| Field | Type | Description |
+|-------|------|-------------|
+| `text` | string | The message to display. May also be sent as `payload` for compatibility. |
+| `payload` | string | Alias for `text`; used if `text` is not provided. |
+| `target_display_count` | int | How many times to show the message. Defaults to `DEFAULT_TARGET_DISPLAY_COUNT`. |
+| `display_duration` | int | Seconds each show lasts. Defaults to `DEFAULT_DISPLAY_DURATION`. |
+| `priority` | `"normal"` \| `"high"` | `"high"` jumps the queue. Defaults to `"normal"`. |
 
-```json
-{
-  "text": "HAPPY BIRTHDAY",
-  "targetDisplayCount": 5,
-  "displayDuration": 15,
-  "priority": "high"
-}
-```
+Returns `{ "status": "ok", "id": "<uuid>" }` on success.
 
-All fields except `text` are optional and fall back to `DEFAULT_*` values from config.
+### GET /api/scheduler/stream
+
+SSE event names:
+
+| Event | Payload | Source |
+|-------|---------|--------|
+| `current` | `{ "message": <Message> \| null }` | Scheduler: what the scheduler is currently publishing |
+| `queue` | `{ "messages": [<Message>, ...] }` | Scheduler: all active (non-completed) messages |
+| `history` | `{ "messages": [<Message>, ...] }` | Scheduler: recent submissions, most recent first |
+| `display-state` | `{ "message": { "message": "<payload>" } }` | MQTT feedback: what the display is actually showing |
+
+`<Message>` is the same shape produced by `Message.to_dict()`: `id`, `message`,
+`createdAt`, `status`, `displayDuration`, `targetDisplayCount`, `displayCount`,
+`lastDisplayedAt`, `lastDisplayedTime`, `priority`, `user`.
 
 ## Scheduler
 
@@ -333,41 +365,45 @@ The scheduler is the only component that decides what appears on the display.
 ### Message lifecycle
 
 ```
-Pending  →  Active  →  Completed
+Pending  ->  Active  ->  Completed
 ```
 
-* **Pending**: new message, not yet displayed
-* **Active**: has been displayed at least once
-* **Completed**: reached its `targetDisplayCount`; never scheduled again
+- **Pending**: new message, not yet displayed.
+- **Active**: has been displayed at least once.
+- **Completed**: reached its `target_display_count`; never scheduled again.
 
 ### Selection rule
 
 The scheduler chooses the next message to display using this priority order:
 
-1. **Priority** — `"high"` messages are preferred over `"normal"`.
-2. **displayCount** — among same priority, the message with the lowest count wins (fairness).
-3. **createdAt** — among same priority and count, the oldest message wins (no starvation).
+1. **Priority** - `"high"` messages are preferred over `"normal"`.
+2. **displayCount** - among same priority, the message with the lowest count
+   wins (fairness).
+3. **createdAt** - among same priority and count, the oldest message wins (no
+   starvation).
 
 ### Priority behavior
 
-* **High-priority messages are picked up as soon as possible.**
-* If the scheduler is **idle** when a high-priority message arrives, the idle sleep is
-  interrupted via an internal event; the message is published within milliseconds.
-* If a high-priority message arrives while another message is **currently being displayed**,
-  the in-flight message finishes its full `displayDuration` (per spec: "the currently
-  displayed message is never interrupted"). The high-priority message is selected on the
-  very next tick.
+- **High-priority messages are picked up as soon as possible.**
+- If the scheduler is **idle** when a high-priority message arrives, the idle
+  sleep is interrupted via an internal event; the message is published within
+  milliseconds.
+- If a high-priority message arrives while another message is **currently
+  being displayed**, the in-flight message finishes its full
+  `display_duration` (per spec: "the currently displayed message is never
+  interrupted"). The high-priority message is selected on the very next tick.
 
 ### Idle behavior
 
-* `IDLE_MODE=publish` (default): the configured `IDLE_MESSAGE` is published every
-  `IDLE_PUBLISH_INTERVAL` seconds while the queue is empty.
-* `IDLE_MODE=keep`: nothing is published; the display keeps showing the last message.
+- `IDLE_MODE=publish` (default): the configured `IDLE_MESSAGE` is published
+  every `IDLE_PUBLISH_INTERVAL` seconds while the queue is empty.
+- `IDLE_MODE=keep`: nothing is published; the display keeps showing the last
+  message.
 
 ### Persistence
 
-This MVP is **in-memory only**. The queue is lost on restart. Adding persistent
-storage (SQLite or JSON) is a future extension.
+This MVP is **in-memory only**. The queue and history are lost on restart.
+Adding persistent storage (SQLite or JSON) is a future extension.
 
 ## Tests
 
@@ -376,41 +412,47 @@ storage (SQLite or JSON) is a future extension.
 python -m unittest discover -s backend/tests -t .
 ```
 
-Tests use the standard library `unittest` framework. No external dependencies required.
+Tests use the standard library `unittest` framework. No external dependencies
+required.
 
 Coverage:
 
-- `test_message_and_store.py` — `Message.to_dict()`, `MessageStore` CRUD
-- `test_add_remove.py` — `add_message` validation, defaults, priority; `remove_message` behavior
-- `test_selection.py` — selection algorithm: priority dominates, count, age tiebreak, completed exclusion
-- `test_tick.py` — `scheduler_tick` lifecycle, idle handler, run loop, wake-up, publish failure
-- `test_state.py` — `state()`, `high_priority_count()`, accessors
-- `test_subscribers.py` — SSE subscriber notifications
+- `test_message_and_store.py` - `Message.to_dict()`, `MessageStore` CRUD
+- `test_add_remove.py` - `add_message` validation, defaults, priority;
+  `remove_message` behavior
+- `test_selection.py` - selection algorithm: priority dominates, count, age
+  tiebreak, completed exclusion
+- `test_tick.py` - `scheduler_tick` lifecycle, idle handler, run loop,
+  wake-up, publish failure
+- `test_state.py` - `state()`, `high_priority_count()`, accessors
+- `test_subscribers.py` - SSE subscriber notifications
+- `test_mqtt_client.py` - MQTT display-state subscription and event dispatch
+- `test_sse_merge.py` - SSE event-stream merge logic (scheduler + MQTT queues)
 
 ## Project Structure
 
 ```
 split-flap-display-web/
-├── backend/
-│   ├── app/
-│   │   ├── config.py          # Settings from app.conf
-│   │   ├── models.py          # Pydantic schemas (incl. priority)
-│   │   ├── mqtt_client.py     # Async MQTT wrapper
-│   │   ├── scheduler.py       # Queue, rotation, priority logic
-│   │   ├── scheduler_api.py   # Admin /api/messages and /api/scheduler/* routes
-│   │   └── main.py            # FastAPI application
-│   ├── tests/                 # unittest-based scheduler tests
-│   ├── requirements.txt       # pip dependencies (alternative to uv)
-│   └── app.conf.example       # Configuration template
-├── frontend/
-│   └── static/
-│       ├── index.html         # Main page
-│       ├── app.js             # Frontend logic
-│       └── style.css          # Styling
-├── Dockerfile                 # Multi-stage production build with uv
-├── docker-compose.yml         # Production: App service
-├── pyproject.toml             # uv project config
-└── uv.lock                    # Locked dependency versions
++-- backend/
+|   +-- app/
+|   |   +-- config.py          # Settings loaded from app.conf / environment
+|   |   +-- models.py          # Pydantic request/response schemas
+|   |   +-- mqtt_client.py     # Async MQTT wrapper
+|   |   +-- scheduler.py       # Queue, rotation, priority logic
+|   |   +-- scheduler_api.py   # /api/messages, /api/scheduler/* routes
+|   |   +-- main.py            # FastAPI application entrypoint
+|   +-- tests/                 # unittest-based scheduler and client tests
+|   +-- requirements.txt       # pip dependencies (alternative to uv)
+|   +-- app.conf.example       # Configuration template
++-- frontend/
+|   +-- static/
+|       +-- index.html         # Single-page UI
+|       +-- app.js             # Frontend logic
+|       +-- style.css          # Styling
++-- Dockerfile                 # Multi-stage production build with uv
++-- docker-compose.yml         # Production: App service
++-- pyproject.toml             # uv project config
++-- uv.lock                    # Locked dependency versions
 ```
 
 ## License
