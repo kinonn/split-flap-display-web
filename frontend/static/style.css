@@ -240,3 +240,323 @@ body {
     font-size: 0.9rem;
     padding: 0.1em 0.3em;
 }
+
+/* --- New scheduler UI --- */
+
+.display-now {
+    margin-bottom: 20px;
+    text-align: center;
+}
+
+.now-row {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 0.6em;
+    flex-wrap: wrap;
+    margin-bottom: 8px;
+}
+
+.now-label {
+    font-size: 0.95rem;
+    color: #5f6368;
+    font-weight: 500;
+}
+
+.now-text {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 0.02em;
+    align-items: center;
+}
+
+.state-row {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 0.5em;
+}
+
+.state-label {
+    font-size: 0.85rem;
+    color: #5f6368;
+}
+
+.state-badge {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 10px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+}
+
+.state-badge.state-idle {
+    background: #e8eaed;
+    color: #5f6368;
+}
+
+.state-badge.state-active {
+    background: #e6f4ea;
+    color: #137333;
+}
+
+.quick-send {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+    max-width: 540px;
+    margin: 0 auto;
+}
+
+.quick-send-row {
+    width: 100%;
+}
+
+.quick-send-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    margin-top: 12px;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.priority-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.9rem;
+    color: #5f6368;
+    cursor: pointer;
+    user-select: none;
+}
+
+.priority-toggle input {
+    cursor: pointer;
+}
+
+.queue-btn {
+    background: #1a73e8;
+    color: #fff;
+    border: none;
+    border-radius: 20px;
+    padding: 8px 20px;
+    font-size: 0.95rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s ease, box-shadow 0.2s ease;
+}
+
+.queue-btn:hover {
+    background: #1765c0;
+    box-shadow: 0 1px 4px rgba(26, 115, 232, 0.4);
+}
+
+.queue-btn:active {
+    background: #14559e;
+}
+
+.admin {
+    width: 100%;
+    max-width: 640px;
+    margin: 32px auto 0;
+    text-align: left;
+    border-top: 1px solid #e8eaed;
+    padding-top: 20px;
+}
+
+.admin-title {
+    font-size: 1.1rem;
+    font-weight: 500;
+    color: #202124;
+    margin-bottom: 12px;
+}
+
+.queue-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.queue-empty {
+    color: #80868b;
+    font-size: 0.9rem;
+    font-style: italic;
+    padding: 8px 0;
+}
+
+.queue-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    background: #f8f9fa;
+    border: 1px solid #e8eaed;
+    border-radius: 8px;
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+}
+
+.queue-item-high {
+    border-left: 4px solid #d93025;
+    background: #fef7f7;
+}
+
+.queue-msg {
+    flex: 1;
+    font-weight: 700;
+    color: #202124;
+    word-break: break-all;
+}
+
+.queue-meta {
+    font-size: 0.8rem;
+    color: #5f6368;
+    white-space: nowrap;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+.queue-remove {
+    background: transparent;
+    border: 1px solid #dfe1e5;
+    color: #5f6368;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 0.9rem;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.queue-remove:hover {
+    background: #fce8e6;
+    color: #d93025;
+    border-color: #d93025;
+}
+
+.priority-badge {
+    display: inline-block;
+    background: #d93025;
+    color: #fff;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    text-transform: uppercase;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+.advanced-add {
+    margin-top: 20px;
+    padding: 10px 0;
+}
+
+.advanced-add > summary {
+    cursor: pointer;
+    color: #1a73e8;
+    font-size: 0.9rem;
+    user-select: none;
+    padding: 4px 0;
+}
+
+.advanced-add > summary:hover {
+    text-decoration: underline;
+}
+
+.advanced-form {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+    flex-wrap: wrap;
+}
+
+.advanced-form input,
+.advanced-form select {
+    padding: 6px 10px;
+    font-size: 0.9rem;
+    border: 1px solid #dfe1e5;
+    border-radius: 4px;
+    outline: none;
+    font-family: inherit;
+}
+
+.advanced-form input:focus,
+.advanced-form select:focus {
+    border-color: #1a73e8;
+}
+
+.advanced-form input[name="text"] {
+    flex: 1 1 200px;
+}
+
+.advanced-form button {
+    background: #1a73e8;
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    padding: 6px 16px;
+    font-size: 0.9rem;
+    cursor: pointer;
+}
+
+.advanced-form button:hover {
+    background: #1765c0;
+}
+
+.message-history {
+    list-style: none;
+    margin: 12px 0 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.history-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 4px 0;
+    font-size: 0.85rem;
+    color: #5f6368;
+    border-bottom: 1px solid #f1f3f4;
+}
+
+.history-time {
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    color: #80868b;
+    width: 50px;
+    flex-shrink: 0;
+}
+
+.history-user {
+    color: #1a73e8;
+    width: 100px;
+    flex-shrink: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.history-msg {
+    flex: 1;
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 0.01em;
+}
+
+.history-msg .display-char {
+    font-size: 0.85rem;
+    padding: 0.05em 0.2em;
+}

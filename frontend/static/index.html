@@ -10,29 +10,65 @@
     <div class="container">
         <h1 class="title">Split Flap Display</h1>
 
-        <div id="display-line" class="display-line hidden">
-            <span class="display-prefix">Current message:</span>
-            <span id="display-text"></span>
-        </div>
+        <section id="display-now" class="display-now">
+            <div class="now-row">
+                <span class="now-label">Now showing:</span>
+                <span id="current-msg" class="now-text">—</span>
+            </div>
+            <div class="state-row">
+                <span class="state-label">State:</span>
+                <span id="state-badge" class="state-badge state-idle">Idle</span>
+            </div>
+        </section>
 
         <div class="spacer"></div>
 
         <div id="valid-chars" class="valid-chars"></div>
 
-        <div class="input-wrapper">
-            <div
-                id="message-input"
-                class="message-input"
-                contenteditable="true"
-                spellcheck="false"
-                data-placeholder="Type your message..."
-                autocomplete="off"
-                autofocus
-            ></div>
-        </div>
+        <form id="quick-send" class="quick-send" autocomplete="off">
+            <div class="quick-send-row">
+                <div
+                    id="message-input"
+                    class="message-input"
+                    contenteditable="true"
+                    spellcheck="false"
+                    data-placeholder="Type your message..."
+                    autocomplete="off"
+                ></div>
+            </div>
+            <div class="quick-send-controls">
+                <label class="priority-toggle">
+                    <input type="checkbox" id="priority-toggle" />
+                    <span>High priority</span>
+                </label>
+                <button type="submit" class="queue-btn">Queue message</button>
+            </div>
+            <div id="char-count" class="char-count"></div>
+        </form>
 
-        <div id="char-count" class="char-count"></div>
-        <div id="message-history" class="message-history"></div>
+        <section id="admin" class="admin">
+            <h2 class="admin-title">Queue</h2>
+            <ul id="queue-list" class="queue-list"></ul>
+
+            <details id="advanced-add" class="advanced-add">
+                <summary>Add with custom settings</summary>
+                <form id="advanced-form" class="advanced-form">
+                    <input name="text" type="text" placeholder="Message text" required />
+                    <input name="targetDisplayCount" type="number" min="1" placeholder="Target count" />
+                    <input name="displayDuration" type="number" min="1" placeholder="Duration (s)" />
+                    <select name="priority">
+                        <option value="normal" selected>Normal</option>
+                        <option value="high">High</option>
+                    </select>
+                    <button type="submit">Add</button>
+                </form>
+            </details>
+
+            <details id="history-details" class="advanced-add">
+                <summary>Recent submissions</summary>
+                <ul id="message-history" class="message-history"></ul>
+            </details>
+        </section>
     </div>
 
     <script src="/static/app.js"></script>

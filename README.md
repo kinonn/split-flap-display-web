@@ -21,21 +21,25 @@ A clean, Google-inspired web interface for controlling a split-flap display via 
 ```
 ┌─────────────────────────────────────────┐
 │  Browser (HTML/JS)                      │
-│  - HTTP POST /api/publish               │
-│  - SSE /api/stream                      │
+│  - Queue a message (with priority)      │
+│  - Admin: view/remove queued messages   │
+│  - SSE for live current-message updates │
 └─────────────────┬───────────────────────┘
-                  │ HTTP
+                  │ HTTP / SSE
 ┌─────────────────▼───────────────────────┐
 │  FastAPI Backend                        │
+│  - Scheduler (queue + rotation)        │
 │  - MQTT client (asyncio-mqtt)           │
-│  - Publish/Subscribe to broker          │
-│  - SSE endpoint for real-time updates   │
+│  - Publish to broker per message        │
 └─────────────────┬───────────────────────┘
-                  │ MQTT
+                  │ MQTT (raw string payload)
 ┌─────────────────▼───────────────────────┐
 │  External MQTT Broker                   │
 └─────────────────────────────────────────┘
 ```
+
+The scheduler decides which message to send to the display, in what order,
+and for how long. See [Scheduler](#scheduler) below.
 
 ## Quick Start
 
@@ -257,6 +261,13 @@ MQTT_BROKER_PORT=1883
 MQTT_CLIENT_ID=splitflap-web
 PUBLISH_TOPIC=splitflap/splitflap/set
 SUBSCRIBE_TOPIC=splitflap/splitflap/state
+
+DEFAULT_DISPLAY_DURATION=10
+DEFAULT_TARGET_DISPLAY_COUNT=3
+IDLE_MODE=publish
+IDLE_MESSAGE=WELCOME
+IDLE_PUBLISH_INTERVAL=10
+SCHEDULER_ENABLED=true
 ```
 
 | Variable | Description | Default |
@@ -266,14 +277,27 @@ SUBSCRIBE_TOPIC=splitflap/splitflap/state
 | `MQTT_CLIENT_ID` | Client ID for MQTT connection | `splitflap-web` |
 | `PUBLISH_TOPIC` | Topic to send display commands | `splitflap/splitflap/set` |
 | `SUBSCRIBE_TOPIC` | Topic to receive display state | `splitflap/splitflap/state` |
+| `DEFAULT_DISPLAY_DURATION` | Seconds each message stays up | `10` |
+| `DEFAULT_TARGET_DISPLAY_COUNT` | How many times each new message is shown | `3` |
+| `IDLE_MODE` | `publish` (idle message) or `keep` (last shown) | `publish` |
+| `IDLE_MESSAGE` | Message shown in idle state | `WELCOME` |
+| `IDLE_PUBLISH_INTERVAL` | Seconds between idle republishes | `10` |
+| `SCHEDULER_ENABLED` | Run the scheduler loop | `true` |
 
 ## API Endpoints
 
 | Method | Path | Description |
 |--------|------|-------------|
 | `GET` | `/` | Web interface |
-| `POST` | `/api/publish` | Send message to display |
-| `GET` | `/api/stream` | SSE stream for received messages |
+| `POST` | `/api/publish` | Enqueue a message (optional priority) |
+| `GET` | `/api/messages` | List active (non-completed) messages |
+| `GET` | `/api/messages/all` | List all messages including completed |
+| `GET` | `/api/messages/current` | Currently displayed message |
+| `POST` | `/api/messages` | Enqueue with custom target/duration/priority |
+| `DELETE` | `/api/messages/{id}` | Remove a message from the queue |
+| `GET` | `/api/scheduler/status` | Scheduler state, current, queue size |
+| `GET` | `/api/scheduler/stream` | SSE stream of scheduler events |
+| `GET` | `/api/history` | Recent submissions (who sent what) |
 | `GET` | `/api/config` | Current configuration and status |
 
 ### POST /api/publish
@@ -282,9 +306,86 @@ SUBSCRIBE_TOPIC=splitflap/splitflap/state
 {
   "payload": "HELLO WORLD",
   "topic": "splitflap/splitflap/set",
-  "qos": 0
+  "qos": 0,
+  "priority": "normal"
 }
 ```
+
+`priority` is optional and defaults to `"normal"`. Set to `"high"` to jump the queue.
+
+### POST /api/messages
+
+```json
+{
+  "text": "HAPPY BIRTHDAY",
+  "targetDisplayCount": 5,
+  "displayDuration": 15,
+  "priority": "high"
+}
+```
+
+All fields except `text` are optional and fall back to `DEFAULT_*` values from config.
+
+## Scheduler
+
+The scheduler is the only component that decides what appears on the display.
+
+### Message lifecycle
+
+```
+Pending  →  Active  →  Completed
+```
+
+* **Pending**: new message, not yet displayed
+* **Active**: has been displayed at least once
+* **Completed**: reached its `targetDisplayCount`; never scheduled again
+
+### Selection rule
+
+The scheduler chooses the next message to display using this priority order:
+
+1. **Priority** — `"high"` messages are preferred over `"normal"`.
+2. **displayCount** — among same priority, the message with the lowest count wins (fairness).
+3. **createdAt** — among same priority and count, the oldest message wins (no starvation).
+
+### Priority behavior
+
+* **High-priority messages are picked up as soon as possible.**
+* If the scheduler is **idle** when a high-priority message arrives, the idle sleep is
+  interrupted via an internal event; the message is published within milliseconds.
+* If a high-priority message arrives while another message is **currently being displayed**,
+  the in-flight message finishes its full `displayDuration` (per spec: "the currently
+  displayed message is never interrupted"). The high-priority message is selected on the
+  very next tick.
+
+### Idle behavior
+
+* `IDLE_MODE=publish` (default): the configured `IDLE_MESSAGE` is published every
+  `IDLE_PUBLISH_INTERVAL` seconds while the queue is empty.
+* `IDLE_MODE=keep`: nothing is published; the display keeps showing the last message.
+
+### Persistence
+
+This MVP is **in-memory only**. The queue is lost on restart. Adding persistent
+storage (SQLite or JSON) is a future extension.
+
+## Tests
+
+```bash
+# from the repo root
+python -m unittest discover -s backend/tests -t .
+```
+
+Tests use the standard library `unittest` framework. No external dependencies required.
+
+Coverage:
+
+- `test_message_and_store.py` — `Message.to_dict()`, `MessageStore` CRUD
+- `test_add_remove.py` — `add_message` validation, defaults, priority; `remove_message` behavior
+- `test_selection.py` — selection algorithm: priority dominates, count, age tiebreak, completed exclusion
+- `test_tick.py` — `scheduler_tick` lifecycle, idle handler, run loop, wake-up, publish failure
+- `test_state.py` — `state()`, `high_priority_count()`, accessors
+- `test_subscribers.py` — SSE subscriber notifications
 
 ## Project Structure
 
@@ -293,9 +394,12 @@ split-flap-display-web/
 ├── backend/
 │   ├── app/
 │   │   ├── config.py          # Settings from app.conf
-│   │   ├── models.py          # Pydantic schemas
+│   │   ├── models.py          # Pydantic schemas (incl. priority)
 │   │   ├── mqtt_client.py     # Async MQTT wrapper
+│   │   ├── scheduler.py       # Queue, rotation, priority logic
+│   │   ├── scheduler_api.py   # Admin /api/messages and /api/scheduler/* routes
 │   │   └── main.py            # FastAPI application
+│   ├── tests/                 # unittest-based scheduler tests
 │   ├── requirements.txt       # pip dependencies (alternative to uv)
 │   └── app.conf.example       # Configuration template
 ├── frontend/

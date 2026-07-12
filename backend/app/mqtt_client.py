@@ -19,6 +19,8 @@ class MQTTClient:
         self._history: deque = deque(maxlen=MAX_HISTORY)
         self._subscribers: Set[asyncio.Queue] = set()
         self._task: asyncio.Task | None = None
+        self._latest_message: str | None = None
+        self._current_subscribers: Set[asyncio.Queue] = set()
 
     @property
     def connected(self) -> bool:
@@ -26,6 +28,10 @@ class MQTTClient:
 
     def get_history(self) -> list:
         return list(self._history)
+
+    def get_latest_message(self) -> str | None:
+        """Get the most recent message payload received from the subscribe topic."""
+        return self._latest_message
 
     def subscribe_queue(self) -> asyncio.Queue:
         q: asyncio.Queue = asyncio.Queue(maxsize=MAX_HISTORY)
@@ -36,6 +42,17 @@ class MQTTClient:
 
     def unsubscribe_queue(self, q: asyncio.Queue):
         self._subscribers.discard(q)
+
+    def subscribe_current(self) -> asyncio.Queue:
+        """Subscribe to "current" events when the displayed message changes."""
+        q: asyncio.Queue = asyncio.Queue(maxsize=100)
+        if self._latest_message is not None:
+            q.put_nowait({"type": "current", "message": {"message": self._latest_message}})
+        self._current_subscribers.add(q)
+        return q
+
+    def unsubscribe_current(self, q: asyncio.Queue) -> None:
+        self._current_subscribers.discard(q)
 
     async def start(self):
         self._task = asyncio.create_task(self._run())
@@ -71,8 +88,22 @@ class MQTTClient:
                             if not subscribe_topic.matches(message.topic):
                                 continue
                             payload = message.payload.decode("utf-8", errors="replace")
+                            self._latest_message = payload
                             msg = {"topic": str(message.topic), "payload": payload}
                             self._history.append(msg)
+                            # Notify "current" subscribers that the displayed message changed
+                            for q in list(self._current_subscribers):
+                                try:
+                                    q.put_nowait({"type": "current", "message": {"message": payload}})
+                                except asyncio.QueueFull:
+                                    try:
+                                        q.get_nowait()
+                                    except asyncio.QueueEmpty:
+                                        pass
+                                    try:
+                                        q.put_nowait({"type": "current", "message": {"message": payload}})
+                                    except asyncio.QueueFull:
+                                        pass
                             for q in list(self._subscribers):
                                 try:
                                     q.put_nowait(msg)

@@ -3,10 +3,14 @@ const validSet = new Set(VALID_CHARS);
 
 const validCharsEl = document.getElementById("valid-chars");
 const inputEl = document.getElementById("message-input");
-const displayLine = document.getElementById("display-line");
-const displayText = document.getElementById("display-text");
+const priorityToggleEl = document.getElementById("priority-toggle");
+const quickSendForm = document.getElementById("quick-send");
 const charCountEl = document.getElementById("char-count");
 const messageHistoryEl = document.getElementById("message-history");
+const queueListEl = document.getElementById("queue-list");
+const currentMsgEl = document.getElementById("current-msg");
+const stateBadgeEl = document.getElementById("state-badge");
+const advancedForm = document.getElementById("advanced-form");
 
 function normalizeInputText(value) {
     return (value || "").replace(/\u00A0/g, " ");
@@ -113,6 +117,20 @@ function updateCharCount() {
     charCountEl.textContent = count > 0 ? count + " characters" : "";
 }
 
+function renderDisplayChars(targetEl, text) {
+    const normalized = normalizeInputText(text);
+    targetEl.innerHTML = "";
+    const chars = Array.from(normalized || "");
+    const fragment = document.createDocumentFragment();
+    chars.forEach((ch) => {
+        const span = document.createElement("span");
+        span.className = "display-char";
+        span.textContent = ch === " " ? "\u00A0" : ch;
+        fragment.appendChild(span);
+    });
+    targetEl.appendChild(fragment);
+}
+
 async function loadMessageHistory() {
     try {
         const res = await fetch("/api/history");
@@ -131,47 +149,40 @@ function renderMessageHistory(messages) {
         return;
     }
 
-    const table = document.createElement("table");
-    table.className = "history-table";
-
-    const thead = document.createElement("thead");
-    thead.innerHTML = `
-        <tr>
-            <th>Time</th>
-            <th>User</th>
-            <th>Message</th>
-        </tr>
-    `;
-    table.appendChild(thead);
-
-    const tbody = document.createElement("tbody");
+    const fragment = document.createDocumentFragment();
     messages.forEach((msg) => {
-        const row = document.createElement("tr");
+        const li = document.createElement("li");
+        li.className = "history-item";
 
-        const timeCell = document.createElement("td");
-        timeCell.textContent = msg.time;
+        const timeEl = document.createElement("span");
+        timeEl.className = "history-time";
+        timeEl.textContent = msg.time;
 
-        const userCell = document.createElement("td");
-        userCell.textContent = msg.user;
+        const userEl = document.createElement("span");
+        userEl.className = "history-user";
+        userEl.textContent = msg.user;
 
-        const messageCell = document.createElement("td");
-        const chars = Array.from(msg.message || "");
-        chars.forEach((ch) => {
-            const span = document.createElement("span");
-            span.className = "display-char";
-            span.textContent = ch === " " ? "\u00A0" : ch;
-            messageCell.appendChild(span);
-        });
+        const msgEl = document.createElement("span");
+        msgEl.className = "history-msg";
+        renderDisplayChars(msgEl, msg.message);
 
-        row.appendChild(timeCell);
-        row.appendChild(userCell);
-        row.appendChild(messageCell);
-        tbody.appendChild(row);
+        const prioEl = document.createElement("span");
+        if (msg.priority === "high") {
+            prioEl.className = "priority-badge";
+            prioEl.textContent = "HIGH";
+        }
+
+        li.appendChild(timeEl);
+        li.appendChild(userEl);
+        li.appendChild(msgEl);
+        if (msg.priority === "high") {
+            li.appendChild(prioEl);
+        }
+        fragment.appendChild(li);
     });
-    table.appendChild(tbody);
 
     messageHistoryEl.innerHTML = "";
-    messageHistoryEl.appendChild(table);
+    messageHistoryEl.appendChild(fragment);
 }
 
 let statusTimeout;
@@ -179,7 +190,7 @@ let statusTimeout;
 function showStatus(text, type) {
     clearTimeout(statusTimeout);
     charCountEl.textContent = text;
-    charCountEl.className = "char-count " + type;
+    charCountEl.className = "char-count " + (type || "");
     if (text) {
         statusTimeout = setTimeout(() => {
             charCountEl.className = "char-count";
@@ -188,23 +199,22 @@ function showStatus(text, type) {
     }
 }
 
-async function sendMessage() {
-    const payload = getInputValue().trim();
+async function sendMessage(payload, priority) {
     if (!payload) return;
-
     try {
         const res = await fetch("/api/publish", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ payload }),
+            body: JSON.stringify({ payload, priority }),
         });
         if (res.ok) {
             renderInputText("");
             previousValue = "";
-            showStatus("\u2713 Sent", "success");
+            priorityToggleEl.checked = false;
+            showStatus("\u2713 Queued", "success");
             loadMessageHistory();
         } else {
-            const data = await res.json();
+            const data = await res.json().catch(() => ({}));
             showStatus("Error: " + (data.detail || res.statusText), "error");
         }
     } catch (err) {
@@ -212,45 +222,164 @@ async function sendMessage() {
     }
 }
 
-function renderDisplayText(payload) {
-    const normalizedPayload = normalizeInputText(payload);
-    displayText.innerHTML = "";
-    const chars = Array.from(normalizedPayload || "");
-    const fragment = document.createDocumentFragment();
+quickSendForm.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const payload = getInputValue().trim();
+    const priority = priorityToggleEl.checked ? "high" : "normal";
+    sendMessage(payload, priority);
+});
 
-    chars.forEach((ch) => {
-        const span = document.createElement("span");
-        span.className = "display-char";
-        span.textContent = ch === " " ? "\u00A0" : ch;
-        fragment.appendChild(span);
-    });
+advancedForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const fd = new FormData(advancedForm);
+    const body = {
+        text: (fd.get("text") || "").toString().trim(),
+        priority: (fd.get("priority") || "normal").toString(),
+    };
+    const tdc = fd.get("targetDisplayCount");
+    const dur = fd.get("displayDuration");
+    if (tdc) body.targetDisplayCount = parseInt(tdc, 10);
+    if (dur) body.displayDuration = parseInt(dur, 10);
+    if (!body.text) return;
+    try {
+        const res = await fetch("/api/messages", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+        });
+        if (res.ok) {
+            advancedForm.reset();
+            showStatus("\u2713 Added", "success");
+        } else {
+            const data = await res.json().catch(() => ({}));
+            showStatus("Error: " + (data.detail || res.statusText), "error");
+        }
+    } catch (err) {
+        showStatus("Error: " + err.message, "error");
+    }
+});
 
-    displayText.appendChild(fragment);
+async function loadQueue() {
+    try {
+        const res = await fetch("/api/messages");
+        if (res.ok) {
+            const messages = await res.json();
+            renderQueue(messages);
+        }
+    } catch (err) {
+        console.error("Failed to load queue:", err);
+    }
 }
 
-function connectSSE() {
-    const source = new EventSource("/api/stream");
+function renderQueue(messages) {
+    queueListEl.innerHTML = "";
+    if (!messages || messages.length === 0) {
+        const li = document.createElement("li");
+        li.className = "queue-empty";
+        li.textContent = "Queue is empty.";
+        queueListEl.appendChild(li);
+        return;
+    }
 
-    source.addEventListener("message", (event) => {
-        const data = JSON.parse(event.data);
-        renderDisplayText(data.payload);
-        displayLine.classList.remove("hidden");
+    messages.forEach((m) => {
+        const li = document.createElement("li");
+        li.className = "queue-item" + (m.priority === "high" ? " queue-item-high" : "");
+
+        const textEl = document.createElement("span");
+        textEl.className = "queue-msg";
+        textEl.textContent = m.message;
+
+        const metaEl = document.createElement("span");
+        metaEl.className = "queue-meta";
+        metaEl.textContent = `${m.displayCount}/${m.targetDisplayCount} · ${m.status}`;
+
+        const removeBtn = document.createElement("button");
+        removeBtn.type = "button";
+        removeBtn.className = "queue-remove";
+        removeBtn.textContent = "\u2715";
+        removeBtn.title = "Remove from queue";
+        removeBtn.addEventListener("click", () => removeMessage(m.id));
+
+        li.appendChild(textEl);
+        if (m.priority === "high") {
+            const badge = document.createElement("span");
+            badge.className = "priority-badge";
+            badge.textContent = "HIGH";
+            li.appendChild(badge);
+        }
+        li.appendChild(metaEl);
+        li.appendChild(removeBtn);
+        queueListEl.appendChild(li);
+    });
+}
+
+async function removeMessage(id) {
+    try {
+        const res = await fetch(`/api/messages/${id}`, { method: "DELETE" });
+        if (res.ok) {
+            loadQueue();
+        } else {
+            const data = await res.json().catch(() => ({}));
+            showStatus("Error: " + (data.detail || res.statusText), "error");
+        }
+    } catch (err) {
+        showStatus("Error: " + err.message, "error");
+    }
+}
+
+function updateCurrent(message) {
+    if (message) {
+        renderDisplayChars(currentMsgEl, message.message);
+    } else {
+        currentMsgEl.textContent = "\u2014";
+    }
+}
+
+function updateState(state, currentMessage) {
+    stateBadgeEl.classList.remove("state-idle", "state-active");
+    if (state === "Active" && currentMessage) {
+        stateBadgeEl.classList.add("state-active");
+        stateBadgeEl.textContent = "Active";
+    } else {
+        stateBadgeEl.classList.add("state-idle");
+        stateBadgeEl.textContent = "Idle";
+    }
+}
+
+function connectSchedulerSSE() {
+    const source = new EventSource("/api/scheduler/stream");
+
+    source.addEventListener("current", (event) => {
+        try {
+            const data = JSON.parse(event.data);
+            updateCurrent(data.message);
+            updateState(data.message ? "Active" : "Idle", data.message);
+        } catch (e) {
+            console.error("Bad current event:", e);
+        }
+    });
+
+    source.addEventListener("queue", () => {
+        loadQueue();
     });
 
     source.onerror = () => {
         source.close();
-        setTimeout(connectSSE, 3000);
+        setTimeout(connectSchedulerSSE, 3000);
     };
 }
 
 inputEl.addEventListener("input", filterInput);
 inputEl.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") {
+    if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
-        sendMessage();
+        const payload = getInputValue().trim();
+        const priority = priorityToggleEl.checked ? "high" : "normal";
+        sendMessage(payload, priority);
     }
 });
 
 buildValidCharsDisplay();
-connectSSE();
+connectSchedulerSSE();
+loadQueue();
 loadMessageHistory();
