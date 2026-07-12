@@ -60,6 +60,42 @@ async def status():
     }
 
 
+async def _merge_event_streams(*sources: asyncio.Queue) -> "asyncio.AsyncIterator[dict]":
+    """Merge multiple event queues into a single async iterator.
+
+    Each source queue is drained by a dedicated long-lived relay task that
+    copies events into a shared `merged` queue. The caller consumes the
+    merged queue one event at a time. This avoids the task-leak race
+    condition that `asyncio.wait(..., FIRST_COMPLETED)` over
+    `create_task`-based waiters can produce: a pending waiter from a prior
+    loop iteration can steal an event intended for a fresh waiter on the
+    same queue, causing the new waiter to deadlock and events to be
+    silently dropped.
+
+    The relay tasks are cancelled when this generator is closed.
+    """
+    merged: asyncio.Queue = asyncio.Queue(maxsize=1000)
+    relay_tasks: list[asyncio.Task] = []
+
+    async def _relay(src: asyncio.Queue) -> None:
+        try:
+            while True:
+                evt = await src.get()
+                await merged.put(evt)
+        except asyncio.CancelledError:
+            return
+
+    for src in sources:
+        relay_tasks.append(asyncio.create_task(_relay(src)))
+
+    try:
+        while True:
+            yield await merged.get()
+    finally:
+        for t in relay_tasks:
+            t.cancel()
+
+
 @router.get("/api/scheduler/stream")
 async def stream():
     scheduler_q = _get().subscribe_queue()
@@ -67,25 +103,14 @@ async def stream():
 
     async def event_generator():
         try:
-            while True:
-                # Wait for events from either the scheduler queue or the
-                # MQTT display-state queue. The two event streams are kept
-                # separate on the wire (different SSE event names) so the
-                # client can distinguish scheduler-published "current"
-                # messages from display-reported "display-state" messages.
-                done, _ = await asyncio.wait(
-                    [
-                        asyncio.create_task(scheduler_q.get()),
-                        asyncio.create_task(mqtt_q.get()),
-                    ],
-                    return_when=asyncio.FIRST_COMPLETED,
-                )
-                for task in done:
-                    evt = task.result()
-                    yield {"event": evt.get("type", "message"), "data": json.dumps(evt)}
-        except asyncio.CancelledError:
+            # The two event streams are kept separate on the wire (different
+            # SSE event names) so the client can distinguish
+            # scheduler-published "current" messages from display-reported
+            # "display-state" messages.
+            async for evt in _merge_event_streams(scheduler_q, mqtt_q):
+                yield {"event": evt.get("type", "message"), "data": json.dumps(evt)}
+        finally:
             _get().unsubscribe_queue(scheduler_q)
             mqtt_client.unsubscribe_display_state(mqtt_q)
-            raise
 
     return EventSourceResponse(event_generator())
