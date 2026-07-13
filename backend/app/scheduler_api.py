@@ -37,6 +37,21 @@ async def current():
     return m.to_dict() if m else None
 
 
+@router.get("/api/messages/display-state")
+async def display_state():
+    """Return the latest message from the display firmware (MQTT retained state topic).
+
+    This reflects what the physical display is actually showing, which persists
+    until the next write — unlike /api/messages/current which clears when the
+    scheduler's message completes its display cycle.
+    """
+    from .mqtt_client import mqtt_client
+    latest = mqtt_client.get_latest_message()
+    if latest is None:
+        return None
+    return {"message": latest}
+
+
 @router.delete("/api/messages/{message_id}")
 async def remove(message_id: str):
     try:
