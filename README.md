@@ -314,8 +314,9 @@ the queue, current, and history are all managed from `/`.
 | `GET` | `/static/*` | Frontend assets (JS, CSS) |
 | `GET` | `/api/config` | Current configuration and connection status |
 | `POST` | `/api/publish` | Enqueue a message (with optional priority) |
-| `GET` | `/api/messages/current` | Currently displayed message, if any |
-| `DELETE` | `/api/messages/{id}` | Remove a message from the queue |
+| `GET` | `/api/messages/current` | Scheduler's current message (queue state), if any — **not necessarily what's on the display** |
+| `GET` | `/api/messages/display-state` | Actual message currently on the physical display (from firmware MQTT state) |
+| `DELETE` | `/api/messages/{id}` | Remove a **queued** message (by scheduler ID) |
 | `GET` | `/api/scheduler/status` | Scheduler state, current, queue size, high-priority count |
 | `GET` | `/api/scheduler/stream` | SSE stream of `current`, `queue`, `history`, and `display-state` events |
 
@@ -343,16 +344,30 @@ All fields except `text` are optional:
 
 Returns `{ "status": "ok", "id": "<uuid>" }` on success.
 
+### GET /api/messages/display-state
+
+Returns the latest message from the display firmware's MQTT retained state topic
+(`splitflap/splitflap/state`). This reflects what the **physical display is
+actually showing**, which persists until the next write — unlike
+`/api/messages/current` which clears when the scheduler's message completes its
+display cycle.
+
+```json
+{ "message": "HELLO WORLD" }
+```
+
+If no message has been received from the firmware yet, returns `null`.
+
 ### GET /api/scheduler/stream
 
 SSE event names:
 
 | Event | Payload | Source |
 |-------|---------|--------|
-| `current` | `{ "message": <Message> \| null }` | Scheduler: what the scheduler is currently publishing |
+| `current` | `{ "message": <Message> \| null }` | Scheduler: the message the scheduler has *just published* (queue state — clears when the message completes its `target_display_count`) |
 | `queue` | `{ "messages": [<Message>, ...] }` | Scheduler: all active (non-completed) messages |
 | `history` | `{ "messages": [<Message>, ...] }` | Scheduler: recent submissions, most recent first |
-| `display-state` | `{ "message": { "message": "<payload>" } }` | MQTT feedback: what the display is actually showing |
+| `display-state` | `{ "message": { "message": "<payload>" } }` | MQTT feedback: what the display is **actually showing** (from firmware's retained `splitflap/splitflap/state` topic — persists until next write) |
 
 `<Message>` is the same shape produced by `Message.to_dict()`: `id`, `message`,
 `createdAt`, `status`, `displayDuration`, `targetDisplayCount`, `displayCount`,
