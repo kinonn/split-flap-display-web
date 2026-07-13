@@ -33,12 +33,39 @@ def _get() -> Scheduler:
 
 @router.get("/api/messages/current")
 async def current():
+    """Return the scheduler's current message (queue state).
+
+    Note: This reflects the scheduler's internal queue state — what the scheduler
+    has most recently published. It does NOT necessarily reflect what is physically
+    on the display right now. For the actual display content, use
+    `/api/messages/display-state` which reads the firmware's MQTT retained state.
+    """
     m = _get().get_current_message()
     return m.to_dict() if m else None
 
 
+@router.get("/api/messages/display-state")
+async def display_state():
+    """Return the latest message from the display firmware (MQTT retained state topic).
+
+    This reflects what the physical display is actually showing, which persists
+    until the next write — unlike /api/messages/current which clears when the
+    scheduler's message completes its display cycle.
+    """
+    from .mqtt_client import mqtt_client
+    latest = mqtt_client.get_latest_message()
+    if latest is None:
+        return None
+    return {"message": latest}
+
+
 @router.delete("/api/messages/{message_id}")
 async def remove(message_id: str):
+    """Remove a queued message by its scheduler ID.
+
+    This operates on the scheduler's queue, not the physical display.
+    The message is marked COMPLETED and will never be displayed again.
+    """
     try:
         uid = uuid.UUID(message_id)
     except ValueError:
