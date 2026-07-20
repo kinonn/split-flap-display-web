@@ -4,6 +4,11 @@ A simple web interface for sending messages to a split-flap display via MQTT.
 The single page lets anyone queue a message, watch the live display state, and
 manage the queue (view, remove, and inspect message history) in one place.
 
+The backend is implemented in **Go** using the [Fiber](https://gofiber.io)
+web framework. The source lives under [`backend-go/`](backend-go/); a legacy
+Python implementation remains under [`backend/`](backend/) for reference but is
+no longer used by `docker compose` or the production image.
+
 ## Features
 
 - **Single-page UI**: Title, live "Now showing" panel, character picker, queue
@@ -17,6 +22,8 @@ manage the queue (view, remove, and inspect message history) in one place.
 - **Priority**: Toggle "High priority" to jump the queue.
 - **MQTT integration**: Publishes commands to the display and subscribes to its
   state topic.
+- **Small static binary**: the Go backend ships as a single ~15 MB binary with
+  no runtime interpreter, so the production Docker image is ~20 MB.
 
 ## Valid Characters
 
@@ -36,10 +43,10 @@ manage the queue (view, remove, and inspect message history) in one place.
 +--------------------+--------------------+
                      | HTTP / SSE
 +--------------------v--------------------+
-|  FastAPI Backend                        |
-|  - Scheduler (queue + rotation)         |
-|  - MQTT client (asyncio-mqtt)           |
-|  - Publish to broker per message        |
+|  Go Backend (Fiber)                    |
+|  - Scheduler (queue + rotation)        |
+|  - paho.mqtt client                    |
+|  - Publish to broker per message       |
 +--------------------+--------------------+
                      | MQTT (raw string payload)
 +--------------------v--------------------+
@@ -52,56 +59,48 @@ in what order, and for how long. See [Scheduler](#scheduler) below.
 
 ## Quick Start
 
-### Using uv (Recommended)
+### From source (Go)
+
+Requirements: Go 1.22 or newer.
 
 ```bash
-# Install uv if not already installed
-curl -LsSf https://astral.sh/uv/install.sh | sh
-
-# Clone and setup
+# Clone
 git clone <repo-url>
 cd split-flap-display-web
 
-# Create virtual environment and install dependencies
-uv sync
+# Configure
+cp backend-go/app.conf.example backend-go/app.conf
+# Edit backend-go/app.conf with your MQTT broker settings
 
-# Configure environment
-cp backend/app.conf.example backend/app.conf
-# Edit backend/app.conf with your MQTT broker settings
-
-# Run the server
-uv run uvicorn backend.app.main:app --reload --port 8000
+# Run (from backend-go/ so app.conf is picked up)
+cd backend-go
+go run ./cmd/server
 ```
 
-### Using pip
+Open http://localhost:8100 in your browser.
+
+### Build a binary
 
 ```bash
-# Clone and setup
-git clone <repo-url>
-cd split-flap-display-web
+cd backend-go
+go build -trimpath -ldflags="-s -w" -o bin/server ./cmd/server
+./bin/server
+```
 
-# Create virtual environment
-python -m venv .venv
-source .venv/bin/activate  # Linux/Mac
-# .venv\Scripts\activate   # Windows
+Cross-compile a static Linux binary for Docker / Raspberry Pi:
 
-# Install dependencies
-pip install -r backend/requirements.txt
-
-# Configure environment
-cp backend/app.conf.example backend/app.conf
-# Edit backend/app.conf with your MQTT broker settings
-
-# Run the server
-uvicorn backend.app.main:app --reload --port 8000
+```bash
+cd backend-go
+CGO_ENABLED=0 GOOS=linux GOARCH=arm64 \
+    go build -trimpath -ldflags="-s -w" -o bin/server ./cmd/server
 ```
 
 ### Using Docker (Production)
 
 ```bash
-# Configure environment
-cp backend/app.conf.example backend/app.conf
-# Edit backend/app.conf with your MQTT broker settings
+# Configure environment (optional — env vars override file values)
+cp backend-go/app.conf.example backend-go/app.conf
+# Edit backend-go/app.conf with your MQTT broker settings
 
 # Build and run the app
 docker compose up -d --build
@@ -128,10 +127,10 @@ git clone <repo-url>
 cd split-flap-display-web
 
 # Create production configuration file
-cp backend/app.conf.example backend/app.conf
+cp backend-go/app.conf.example backend-go/app.conf
 ```
 
-Edit `backend/app.conf` for your environment. At a minimum, set
+Edit `backend-go/app.conf` for your environment. At a minimum, set
 `MQTT_BROKER_HOST` to a hostname or IP address that is reachable from inside
 the app container (see the warning below). See
 [Configuration](#configuration) for the full file and the list of variables.
@@ -147,18 +146,19 @@ the app container (see the warning below). See
 docker compose build
 ```
 
-The Dockerfile uses a multi-stage build:
+The Dockerfile (`backend-go/Dockerfile`) uses a multi-stage build:
 
-1. **Builder stage**: Uses `uv` to resolve and install dependencies into a
-   virtual environment.
-2. **Runtime stage**: Minimal `python:3.12-slim` image with only the venv and
-   application code.
+1. **Builder stage**: `golang:1.22-alpine` compiles a static binary with
+   `CGO_ENABLED=0` and trimmed symbols.
+2. **Runtime stage**: Minimal `alpine:3.20` image with only the binary,
+   `app.conf`, and the bundled static frontend.
 
 Production hardening included:
 
-- Non-root user (`appuser`) for security
-- Health check endpoint (`/api/config`)
-- Single worker (required for SSE + in-memory state)
+- Non-root user (`app`) for security.
+- `wget`-based health check endpoint (`/api/config`) every 30 s.
+- Static binary — no interpreter, no separate runtime dependencies.
+- Single process — required for SSE + in-memory state.
 
 ### Step 3: Deploy
 
@@ -211,7 +211,7 @@ docker stats split-flap-web
 ### Using an External MQTT Broker
 
 The app requires an external MQTT broker. Configure the broker address in
-`backend/app.conf`:
+`backend-go/app.conf`:
 
 ```env
 MQTT_BROKER_HOST=your-broker.example.com
@@ -225,14 +225,17 @@ MQTT_BROKER_PORT=1883
 
 ### Architecture Notes
 
-**Single Worker Constraint:**
+**Single-Process Constraint:**
 
-The application must run with exactly **one uvicorn worker** because:
+The application must run as a **single process** because:
 
-- SSE connections are tracked in-memory per worker.
-- Message history is stored in a per-process deque.
-- Multiple workers would each have independent state, breaking real-time
+- SSE connections are tracked in-memory per process.
+- Message history is stored in a per-process ring buffer.
+- Multiple processes would each have independent state, breaking real-time
   updates.
+
+The Fiber server uses goroutines for concurrency and never needs
+horizontal scaling for the typical home deployment.
 
 **In-Memory State:**
 
@@ -249,12 +252,12 @@ Default limits in `docker-compose.yml`:
 | Memory   | 256 MB     | 128 MB      |
 | CPU      | 0.5 cores  | 0.25 cores  |
 
-Adjust based on your load. The app is lightweight; limits can be increased
-for environments with many concurrent SSE connections.
+The Go backend typically idles well below 32 MB of RAM; adjust based on how
+many concurrent SSE connections you expect.
 
 ### Security Considerations
 
-- The container runs as non-root user `appuser`.
+- The container runs as non-root user `app`.
 - Expose only port 8100 (web) externally; keep port 1883 (MQTT) internal unless
   needed.
 - Consider adding a reverse proxy (nginx, Caddy) for HTTPS termination.
@@ -265,9 +268,10 @@ for environments with many concurrent SSE connections.
 
 ## Configuration
 
-The full `backend/app.conf` is shown below. The shipped `backend/app.conf.example`
-is the source of truth for the recommended values; copy it to `backend/app.conf`
-and edit as needed. Any variable can also be supplied via the environment.
+The full `backend-go/app.conf` is shown below. The shipped
+`backend-go/app.conf.example` is the source of truth for the recommended values;
+copy it to `backend-go/app.conf` and edit as needed. Any variable can also be
+supplied via the environment (highest precedence).
 
 ```env
 MQTT_BROKER_HOST=localhost
@@ -278,7 +282,7 @@ SUBSCRIBE_TOPIC=splitflap/splitflap/state
 
 # Scheduler defaults
 DEFAULT_DISPLAY_DURATION=10
-DEFAULT_TARGET_DISPLAY_COUNT=3
+DEFAULT_TARGET_DISPLAY_COUNT=6
 
 # Idle behavior: "publish" publishes IDLE_MESSAGE repeatedly; "keep" leaves the display alone
 IDLE_MODE=publish
@@ -297,7 +301,7 @@ SCHEDULER_ENABLED=true
 | `PUBLISH_TOPIC` | Topic to send display commands | `splitflap/splitflap/set` |
 | `SUBSCRIBE_TOPIC` | Topic to receive display state | `splitflap/splitflap/state` |
 | `DEFAULT_DISPLAY_DURATION` | Seconds each message stays up | `10` |
-| `DEFAULT_TARGET_DISPLAY_COUNT` | How many times each new message is shown | `3` |
+| `DEFAULT_TARGET_DISPLAY_COUNT` | How many times each new message is shown | `6` |
 | `IDLE_MODE` | `publish` (idle message) or `keep` (last shown) | `publish` |
 | `IDLE_MESSAGE` | Message shown in idle state | `WELCOME` |
 | `IDLE_PUBLISH_INTERVAL` | Seconds between idle republishes | `10` |
@@ -369,7 +373,7 @@ SSE event names:
 | `history` | `{ "messages": [<Message>, ...] }` | Scheduler: recent submissions, most recent first |
 | `display-state` | `{ "message": { "message": "<payload>" } }` | MQTT feedback: what the display is **actually showing** (from firmware's retained `splitflap/splitflap/state` topic — persists until next write) |
 
-`<Message>` is the same shape produced by `Message.to_dict()`: `id`, `message`,
+`<Message>` is the same shape produced by `Message.ToDTO()`: `id`, `message`,
 `createdAt`, `status`, `displayDuration`, `targetDisplayCount`, `displayCount`,
 `lastDisplayedAt`, `lastDisplayedTime`, `priority`, `user`.
 
@@ -422,53 +426,55 @@ Adding persistent storage (SQLite or JSON) is a future extension.
 
 ## Tests
 
-```bash
-# from the repo root
-python -m unittest discover -s backend/tests -t .
-```
+The Go backend ships with unit tests under `backend-go/internal/`. From the
+`backend-go/` directory:
 
-Tests use the standard library `unittest` framework. No external dependencies
-required.
+```bash
+go vet ./...
+go test ./... -timeout 30s
+```
 
 Coverage:
 
-- `test_message_and_store.py` - `Message.to_dict()`, `MessageStore` CRUD
-- `test_add_remove.py` - `add_message` validation, defaults, priority;
-  `remove_message` behavior
-- `test_selection.py` - selection algorithm: priority dominates, count, age
-  tiebreak, completed exclusion
-- `test_tick.py` - `scheduler_tick` lifecycle, idle handler, run loop,
-  wake-up, publish failure
-- `test_state.py` - `state()`, `high_priority_count()`, accessors
-- `test_subscribers.py` - SSE subscriber notifications
-- `test_mqtt_client.py` - MQTT display-state subscription and event dispatch
-- `test_sse_merge.py` - SSE event-stream merge logic (scheduler + MQTT queues)
+- `internal/config/config_test.go` — config file parsing, env overrides,
+  defaults.
+- `internal/scheduler/scheduler_test.go` — message validation, defaults,
+  history, selection algorithm (priority/count/age), queue snapshot ordering,
+  state, remove, wakeup, Start/Stop lifecycle.
+
+The tests stub the MQTT client and never require a live broker.
 
 ## Project Structure
 
 ```
 split-flap-display-web/
-+-- backend/
-|   +-- app/
-|   |   +-- config.py          # Settings loaded from app.conf / environment
-|   |   +-- models.py          # Pydantic request/response schemas
-|   |   +-- mqtt_client.py     # Async MQTT wrapper
-|   |   +-- scheduler.py       # Queue, rotation, priority logic
-|   |   +-- scheduler_api.py   # /api/messages, /api/scheduler/* routes
-|   |   +-- main.py            # FastAPI application entrypoint
-|   +-- tests/                 # unittest-based scheduler and client tests
-|   +-- requirements.txt       # pip dependencies (alternative to uv)
-|   +-- app.conf.example       # Configuration template
++-- backend-go/                 # Go (Fiber) backend - primary implementation
+|   +-- cmd/server/main.go      # entry point: lifecycle + signal handling
+|   +-- internal/
+|   |   +-- config/             # app.conf + env loader with defaults
+|   |   +-- models/             # Message, Priority, HistoryEntry, DTOs
+|   |   +-- store/              # thread-safe in-memory message store
+|   |   +-- queue/              # bounded drop-oldest pub/sub queue
+|   |   +-- mqttclient/         # paho wrapper: connect/publish/subscribe
+|   |   +-- scheduler/          # tick loop, idle handling, SSE subs
+|   |   +-- api/                # Fiber routes + SSE handler
+|   +-- app.conf                # configuration file (defaults)
+|   +-- app.conf.example        # annotated configuration template
+|   +-- Dockerfile              # multi-stage production build
+|   +-- go.mod / go.sum         # module pins
++-- backend/                    # legacy Python (FastAPI) implementation
 +-- frontend/
 |   +-- static/
-|       +-- index.html         # Single-page UI
-|       +-- app.js             # Frontend logic
-|       +-- style.css          # Styling
-+-- Dockerfile                 # Multi-stage production build with uv
-+-- docker-compose.yml         # Production: App service
-+-- pyproject.toml             # uv project config
-+-- uv.lock                    # Locked dependency versions
+|       +-- index.html          # Single-page UI
+|       +-- app.js              # Frontend logic
+|       +-- style.css           # Styling
++-- docker-compose.yml          # Production: builds backend-go/Dockerfile
++-- BACKEND_SPEC.md             # Backend requirements specification
++-- pyproject.toml / uv.lock    # legacy Python project pins
 ```
+
+See [`backend-go/README.md`](backend-go/README.md) for backend-specific build,
+test and deployment instructions.
 
 ## License
 
