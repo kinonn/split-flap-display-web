@@ -16,7 +16,7 @@ import (
 )
 
 func main() {
-	confPath := "app.conf"
+	confPath := "backend-go/app.conf"
 	if p, err := filepath.Abs("app.conf"); err == nil {
 		confPath = p
 	}
