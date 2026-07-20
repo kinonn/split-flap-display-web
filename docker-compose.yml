@@ -1,15 +1,23 @@
 services:
   app:
-    build: .
+    build:
+      context: .
+      dockerfile: backend-go/Dockerfile
     container_name: split-flap-web
     restart: unless-stopped
     ports:
       - "8100:8100"
-    env_file: backend/app.conf
+    environment:
+      # Any value set here overrides the same key in backend-go/app.conf.
+      # Comment out to fall back to file/config defaults.
+      MQTT_BROKER_HOST: "localhost"
+      MQTT_BROKER_PORT: "1883"
+    env_file:
+      - backend-go/app.conf
     volumes:
       - /etc/localtime:/etc/localtime:ro
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8100/api/config')"]
+      test: ["CMD", "wget", "-qO-", "http://localhost:8100/api/config"]
       interval: 30s
       timeout: 10s
       retries: 3
