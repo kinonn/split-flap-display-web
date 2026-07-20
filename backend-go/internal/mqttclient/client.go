@@ -53,6 +53,7 @@ type Client struct {
 
 // New constructs an unconnected Client.
 func New(host string, port int, clientID, subscribeTopic string) *Client {
+	log.Printf("mqtt: configuring connection to %s:%d", host, port)
 	c := &Client{
 		host:           host,
 		port:           port,
