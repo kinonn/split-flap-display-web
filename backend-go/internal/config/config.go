@@ -49,9 +49,14 @@ func Load(path string) Config {
 
 	if path != "" {
 		if _, err := os.Stat(path); err == nil {
+			log.Printf("config: loading configuration from %s", path)
 			if err := loadFile(path, &cfg); err != nil {
 				log.Printf("config: failed to parse %s: %v", path, err)
+			} else {
+				log.Printf("config: successfully loaded %s", path)
 			}
+		} else {
+			log.Printf("config: %s not found, using defaults", path)
 		}
 	}
 
