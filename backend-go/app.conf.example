@@ -1,4 +1,6 @@
-MQTT_BROKER_HOST=rpi41.local
+# Copy this file to app.conf and replace <broker-ip> with the address of
+# your MQTT broker (an IP or hostname reachable from the app container).
+MQTT_BROKER_HOST=<broker-ip>
 MQTT_BROKER_PORT=1883
 MQTT_CLIENT_ID=splitflap-web
 PUBLISH_TOPIC=splitflap/splitflap/set

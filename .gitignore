@@ -33,9 +33,6 @@ dist/
 app.conf
 app.conf.*
 !app.conf.example
-backend/app.conf
-backend/app.conf.*
-!backend/app.conf.example
 
 # Frontend dependencies and build output
 node_modules/

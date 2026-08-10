@@ -1,0 +1,21 @@
+# Build artefacts
+bin/
+*.exe
+*.test
+*.out
+
+# Local development caches
+*.log
+
+# Environment-specific overrides
+app.conf
+app.conf.local
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Tests
+*_test.go
