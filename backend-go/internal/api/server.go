@@ -5,7 +5,6 @@ package api
 import (
 	"bufio"
 	"context"
-	"encoding/json"
 	"log"
 	"regexp"
 	"strings"
@@ -61,27 +60,25 @@ func New(s *Server) *fiber.App {
 
 func (s *Server) handleConfig(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{
-		"publish_topic":               s.Cfg.PublishTopic,
-		"subscribe_topic":             s.Cfg.SubscribeTopic,
-		"broker_host":                 s.Cfg.MQTTBrokerHost,
-		"connected":                  s.MQTT.Connected(),
-		"default_display_duration":    s.Cfg.DefaultDisplayDuration,
+		"publish_topic":                s.Cfg.PublishTopic,
+		"subscribe_topic":              s.Cfg.SubscribeTopic,
+		"broker_host":                  s.Cfg.MQTTBrokerHost,
+		"connected":                    s.MQTT.Connected(),
+		"default_display_duration":     s.Cfg.DefaultDisplayDuration,
 		"default_target_display_count": s.Cfg.DefaultTargetDisplayCount,
-		"idle_message":               s.Cfg.IdleMessage,
-		"idle_mode":                  s.Cfg.IdleMode,
-		"scheduler_enabled":           s.Cfg.SchedulerEnabled,
+		"idle_message":                 s.Cfg.IdleMessage,
+		"idle_mode":                    s.Cfg.IdleMode,
+		"scheduler_enabled":            s.Cfg.SchedulerEnabled,
 	})
 }
 
 type publishRequest struct {
-	Text                string  `json:"text"`
+	Text               string  `json:"text"`
 	Payload            string  `json:"payload"`
 	TargetDisplayCount *int    `json:"target_display_count"`
 	DisplayDuration    *int    `json:"display_duration"`
 	Priority           *string `json:"priority"`
 }
-
-var emailRe = regexp.MustCompile(`^[^@]+@`)
 
 func (s *Server) handlePublish(c *fiber.Ctx) error {
 	var req publishRequest
@@ -100,7 +97,7 @@ func (s *Server) handlePublish(c *fiber.Ctx) error {
 	if req.Priority != nil {
 		p, ok := models.ParsePriority(*req.Priority)
 		if !ok {
-			return c.Status(400).SendString("priority must be 'normal' or 'high'")
+			return sendError(c, 400, "priority must be 'normal' or 'high'")
 		}
 		pp := p
 		priority = &pp
@@ -120,11 +117,11 @@ func (s *Server) handlePublish(c *fiber.Ctx) error {
 		ve, ok := err.(*scheduler.ValidationError)
 		switch {
 		case ok:
-			return c.Status(400).SendString(ve.Error())
+			return sendError(c, 400, ve.Error())
 		case text == "":
-			return c.Status(400).SendString("text must be non-empty")
+			return sendError(c, 400, "text must be non-empty")
 		default:
-			return c.Status(500).SendString(err.Error())
+			return sendError(c, 500, err.Error())
 		}
 	}
 	return c.JSON(fiber.Map{"status": "ok", "id": id})
@@ -151,10 +148,10 @@ var uuidRe = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[
 func (s *Server) handleDeleteMessage(c *fiber.Ctx) error {
 	id := c.Params("id")
 	if !uuidRe.MatchString(id) {
-		return c.Status(400).SendString("invalid uuid")
+		return sendError(c, 400, "invalid uuid")
 	}
 	if !s.Scheduler.RemoveMessage(id) {
-		return c.Status(404).SendString("message not found")
+		return sendError(c, 404, "message not found")
 	}
 	return c.JSON(fiber.Map{"status": "ok"})
 }
@@ -167,10 +164,10 @@ func (s *Server) handleSchedulerStatus(c *fiber.Ctx) error {
 		curr = &dto
 	}
 	return c.JSON(fiber.Map{
-		"state":              s.Scheduler.State(),
-		"current":            curr,
-		"queueSize":          len(s.Scheduler.GetActiveMessages()),
-		"highPriorityCount":  s.Scheduler.HighPriorityCount(),
+		"state":             s.Scheduler.State(),
+		"current":           curr,
+		"queueSize":         len(s.Scheduler.GetActiveMessages()),
+		"highPriorityCount": s.Scheduler.HighPriorityCount(),
 	})
 }
 
@@ -276,11 +273,8 @@ func (s *Server) handleSSE(c *fiber.Ctx) error {
 	return nil
 }
 
-// helper for marshaling null responses in handlers.
-func toJSON(v interface{}) []byte {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return []byte("null")
-	}
-	return b
+// sendError writes a JSON error body matching the FastAPI-style shape the
+// frontend expects ({ "detail": "<message>" }).
+func sendError(c *fiber.Ctx, status int, msg string) error {
+	return c.Status(status).JSON(fiber.Map{"detail": msg})
 }

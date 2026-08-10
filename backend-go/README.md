@@ -124,8 +124,9 @@ The image:
 * Runs as a non-root user (`app`).
 * Exposes port `8100`.
 * Includes a `wget`-based `HEALTHCHECK` against `GET /api/config`.
-* Reads `app.conf` from `/app/app.conf`. Environment variables override
-  file values at runtime.
+* Is configured entirely via environment variables at runtime (no
+  `app.conf` is baked into the image). For local/non-Docker runs the
+  binary reads `app.conf` from the working directory as before.
 
 ## Environment variables (override `app.conf`)
 

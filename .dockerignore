@@ -3,9 +3,11 @@ __pycache__
 .git
 .gitignore
 *.md
-!app.conf
-!app.conf.example
 .venv
 venv
 node_modules
 .DS_Store
+
+# Go build artefacts and local config — not needed in the image
+backend-go/bin/
+backend-go/app.conf

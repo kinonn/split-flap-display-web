@@ -8,6 +8,7 @@ bin/
 *.log
 
 # Environment-specific overrides
+app.conf
 app.conf.local
 
 # OS / editor noise

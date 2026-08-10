@@ -5,9 +5,7 @@ The single page lets anyone queue a message, watch the live display state, and
 manage the queue (view, remove, and inspect message history) in one place.
 
 The backend is implemented in **Go** using the [Fiber](https://gofiber.io)
-web framework. The source lives under [`backend-go/`](backend-go/); a legacy
-Python implementation remains under [`backend/`](backend/) for reference but is
-no longer used by `docker compose` or the production image.
+web framework. The source lives under [`backend-go/`](backend-go/).
 
 ## Features
 
@@ -150,8 +148,10 @@ The Dockerfile (`backend-go/Dockerfile`) uses a multi-stage build:
 
 1. **Builder stage**: `golang:1.22-alpine` compiles a static binary with
    `CGO_ENABLED=0` and trimmed symbols.
-2. **Runtime stage**: Minimal `alpine:3.20` image with only the binary,
-   `app.conf`, and the bundled static frontend.
+2. **Runtime stage**: Minimal `alpine:3.20` image with only the binary and
+   the bundled static frontend. Configuration is **not** baked into the image;
+   it is supplied at runtime via environment variables (the compose file reads
+   them from `backend-go/app.conf` via `env_file`).
 
 Production hardening included:
 
@@ -211,7 +211,8 @@ docker stats split-flap-web
 ### Using an External MQTT Broker
 
 The app requires an external MQTT broker. Configure the broker address in
-`backend-go/app.conf`:
+`backend-go/app.conf` (the compose file passes this to the container as
+environment variables via `env_file`):
 
 ```env
 MQTT_BROKER_HOST=your-broker.example.com
@@ -268,13 +269,16 @@ many concurrent SSE connections you expect.
 
 ## Configuration
 
-The full `backend-go/app.conf` is shown below. The shipped
-`backend-go/app.conf.example` is the source of truth for the recommended values;
-copy it to `backend-go/app.conf` and edit as needed. Any variable can also be
-supplied via the environment (highest precedence).
+The full `backend-go/app.conf.example` is shown below. `backend-go/app.conf`
+is **local configuration** and is git-ignored — create it by copying the
+example (`cp backend-go/app.conf.example backend-go/app.conf`) and editing the
+values for your environment. The example file is the committed source of truth
+for the recommended values; to track a change, update `app.conf.example`
+instead. Any variable can also be supplied via the environment (highest
+precedence).
 
 ```env
-MQTT_BROKER_HOST=localhost
+MQTT_BROKER_HOST=<broker-ip>
 MQTT_BROKER_PORT=1883
 MQTT_CLIENT_ID=splitflap-web
 PUBLISH_TOPIC=splitflap/splitflap/set
@@ -282,12 +286,12 @@ SUBSCRIBE_TOPIC=splitflap/splitflap/state
 
 # Scheduler defaults
 DEFAULT_DISPLAY_DURATION=10
-DEFAULT_TARGET_DISPLAY_COUNT=6
+DEFAULT_TARGET_DISPLAY_COUNT=3
 
 # Idle behavior: "publish" publishes IDLE_MESSAGE repeatedly; "keep" leaves the display alone
-IDLE_MODE=publish
+IDLE_MODE=keep
 IDLE_MESSAGE=WELCOME
-IDLE_PUBLISH_INTERVAL=10
+IDLE_PUBLISH_INTERVAL=20
 
 # Set to false to disable the scheduler loop (e.g. for raw /api/publish only)
 SCHEDULER_ENABLED=true
@@ -295,17 +299,21 @@ SCHEDULER_ENABLED=true
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `MQTT_BROKER_HOST` | MQTT broker hostname | `localhost` |
+| `MQTT_BROKER_HOST` | MQTT broker hostname | `<broker-ip>` |
 | `MQTT_BROKER_PORT` | MQTT broker port | `1883` |
 | `MQTT_CLIENT_ID` | Client ID for MQTT connection | `splitflap-web` |
 | `PUBLISH_TOPIC` | Topic to send display commands | `splitflap/splitflap/set` |
 | `SUBSCRIBE_TOPIC` | Topic to receive display state | `splitflap/splitflap/state` |
 | `DEFAULT_DISPLAY_DURATION` | Seconds each message stays up | `10` |
-| `DEFAULT_TARGET_DISPLAY_COUNT` | How many times each new message is shown | `6` |
-| `IDLE_MODE` | `publish` (idle message) or `keep` (last shown) | `publish` |
+| `DEFAULT_TARGET_DISPLAY_COUNT` | How many times each new message is shown | `3` |
+| `IDLE_MODE` | `publish` (idle message) or `keep` (last shown) | `keep` |
 | `IDLE_MESSAGE` | Message shown in idle state | `WELCOME` |
-| `IDLE_PUBLISH_INTERVAL` | Seconds between idle republishes | `10` |
+| `IDLE_PUBLISH_INTERVAL` | Seconds between idle republishes | `20` |
 | `SCHEDULER_ENABLED` | Run the scheduler loop | `true` |
+
+> **Note:** Values shown are the recommended values from `app.conf.example`.
+> The built-in defaults in `internal/config/config.go` apply only when neither
+> `app.conf` nor an environment variable sets a key.
 
 ## API Endpoints
 
@@ -458,11 +466,10 @@ split-flap-display-web/
 |   |   +-- mqttclient/         # paho wrapper: connect/publish/subscribe
 |   |   +-- scheduler/          # tick loop, idle handling, SSE subs
 |   |   +-- api/                # Fiber routes + SSE handler
-|   +-- app.conf                # configuration file (defaults)
+|   +-- app.conf                # local config (git-ignored; copy of app.conf.example)
 |   +-- app.conf.example        # annotated configuration template
 |   +-- Dockerfile              # multi-stage production build
 |   +-- go.mod / go.sum         # module pins
-+-- backend/                    # legacy Python (FastAPI) implementation
 +-- frontend/
 |   +-- static/
 |       +-- index.html          # Single-page UI
@@ -470,7 +477,6 @@ split-flap-display-web/
 |       +-- style.css           # Styling
 +-- docker-compose.yml          # Production: builds backend-go/Dockerfile
 +-- BACKEND_SPEC.md             # Backend requirements specification
-+-- pyproject.toml / uv.lock    # legacy Python project pins
 ```
 
 See [`backend-go/README.md`](backend-go/README.md) for backend-specific build,

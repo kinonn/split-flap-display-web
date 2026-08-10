@@ -37,17 +37,10 @@ WORKDIR /app
 COPY --from=builder /out/server        /app/server
 COPY frontend/static                   /app/frontend/static
 
-# Copy whichever config file is available: prefer backend-go/app.conf
-# (per-environment override), fall back to the committed example.
-COPY backend-go/app.conf*              /tmp/conf/
-RUN if [ -f /tmp/conf/app.conf ]; then \
-        cp /tmp/conf/app.conf        /app/app.conf; \
-    elif [ -f /tmp/conf/app.conf.example ]; then \
-        cp /tmp/conf/app.conf.example /app/app.conf; \
-        cp /tmp/conf/app.conf.example /app/app.conf.example; \
-    else \
-        touch /app/app.conf; \
-    fi && rm -rf /tmp/conf
+# NOTE: configuration is NOT baked into the image. Runtime config is supplied
+# via environment variables (see docker-compose.yml env_file -> backend-go/app.conf,
+# or `-e` flags on `docker run`). The binary falls back to built-in defaults
+# when no env vars are set, which is fine for local non-Docker runs.
 
 USER app
 

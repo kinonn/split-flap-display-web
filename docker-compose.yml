@@ -7,11 +7,6 @@ services:
     restart: unless-stopped
     ports:
       - "8100:8100"
-    environment:
-      # Any value set here overrides the same key in backend-go/app.conf.
-      # Comment out to fall back to file/config defaults.
-      MQTT_BROKER_HOST: "localhost"
-      MQTT_BROKER_PORT: "1883"
     env_file:
       - backend-go/app.conf
     volumes:
