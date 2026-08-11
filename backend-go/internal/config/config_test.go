@@ -23,7 +23,10 @@ func TestDefaults(t *testing.T) {
 	if cfg.MQTTBrokerPort != 1883 {
 		t.Errorf("port = %d", cfg.MQTTBrokerPort)
 	}
-	if cfg.DefaultTargetDisplayCount != 6 {
+	if cfg.DefaultDisplayDuration != 30 {
+		t.Errorf("dur = %d", cfg.DefaultDisplayDuration)
+	}
+	if cfg.DefaultTargetDisplayCount != 4 {
 		t.Errorf("tdc = %d", cfg.DefaultTargetDisplayCount)
 	}
 	if !cfg.SchedulerEnabled {

@@ -285,8 +285,8 @@ PUBLISH_TOPIC=splitflap/splitflap/set
 SUBSCRIBE_TOPIC=splitflap/splitflap/state
 
 # Scheduler defaults
-DEFAULT_DISPLAY_DURATION=10
-DEFAULT_TARGET_DISPLAY_COUNT=3
+DEFAULT_DISPLAY_DURATION=30
+DEFAULT_TARGET_DISPLAY_COUNT=4
 
 # Idle behavior: "publish" publishes IDLE_MESSAGE repeatedly; "keep" leaves the display alone
 IDLE_MODE=keep
@@ -304,8 +304,8 @@ SCHEDULER_ENABLED=true
 | `MQTT_CLIENT_ID` | Client ID for MQTT connection | `splitflap-web` |
 | `PUBLISH_TOPIC` | Topic to send display commands | `splitflap/splitflap/set` |
 | `SUBSCRIBE_TOPIC` | Topic to receive display state | `splitflap/splitflap/state` |
-| `DEFAULT_DISPLAY_DURATION` | Seconds each message stays up | `10` |
-| `DEFAULT_TARGET_DISPLAY_COUNT` | How many times each new message is shown | `3` |
+| `DEFAULT_DISPLAY_DURATION` | Seconds each message stays up | `30` |
+| `DEFAULT_TARGET_DISPLAY_COUNT` | How many times each new message is shown | `4` |
 | `IDLE_MODE` | `publish` (idle message) or `keep` (last shown) | `keep` |
 | `IDLE_MESSAGE` | Message shown in idle state | `WELCOME` |
 | `IDLE_PUBLISH_INTERVAL` | Seconds between idle republishes | `20` |

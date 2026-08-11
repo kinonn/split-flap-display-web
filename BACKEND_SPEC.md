@@ -36,8 +36,8 @@ The server reads configuration from a file named `app.conf` located in the same 
 | `MQTT_CLIENT_ID` | string | `"splitflap-web"` | MQTT client identifier |
 | `PUBLISH_TOPIC` | string | `"splitflap/splitflap/set"` | MQTT topic to publish messages to the display |
 | `SUBSCRIBE_TOPIC` | string | `"splitflap/splitflap/state"` | MQTT topic to subscribe for display state feedback |
-| `DEFAULT_DISPLAY_DURATION` | int | `10` | Default seconds each message stays on the display per cycle |
-| `DEFAULT_TARGET_DISPLAY_COUNT` | int | `6` | Default number of times each message should be displayed before completion |
+| `DEFAULT_DISPLAY_DURATION` | int | `30` | Default seconds each message stays on the display per cycle |
+| `DEFAULT_TARGET_DISPLAY_COUNT` | int | `4` | Default number of times each message should be displayed before completion |
 | `IDLE_MESSAGE` | string | `"WELCOME"` | Message to publish when the scheduler is idle (in "publish" mode) |
 | `IDLE_MODE` | string | `"publish"` | Idle behavior: `"publish"` repeatedly sends IDLE_MESSAGE; `"keep"` does nothing |
 | `IDLE_PUBLISH_INTERVAL` | int | `10` | Seconds between idle message re-publishes |
@@ -102,8 +102,8 @@ When serialized to JSON, a Message produces:
   "message": "HELLO",
   "createdAt": "2026-01-02T03:04:05",
   "status": "Pending",
-  "displayDuration": 10,
-  "targetDisplayCount": 3,
+  "displayDuration": 30,
+  "targetDisplayCount": 4,
   "displayCount": 0,
   "lastDisplayedAt": "2026-01-02T03:04:05" | null,
   "lastDisplayedTime": "03:04" | null,
