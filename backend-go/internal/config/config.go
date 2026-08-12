@@ -18,9 +18,10 @@ type Config struct {
 	MQTTClientID            string
 	PublishTopic            string
 	SubscribeTopic          string
-	DefaultDisplayDuration  int
+	DefaultDisplayDuration    int
 	DefaultTargetDisplayCount int
-	IdleMessage             string
+	DisplayWidth              int
+	IdleMessage               string
 	IdleMode                string
 	IdlePublishInterval     int
 	SchedulerEnabled        bool
@@ -36,6 +37,7 @@ func defaults() Config {
 		SubscribeTopic:            "splitflap/splitflap/state",
 		DefaultDisplayDuration:    10,
 		DefaultTargetDisplayCount: 6,
+		DisplayWidth:              12,
 		IdleMessage:               "WELCOME",
 		IdleMode:                  "publish",
 		IdlePublishInterval:       10,
@@ -93,6 +95,7 @@ func applyEnv(cfg *Config) {
 		"MQTT_BROKER_HOST", "MQTT_BROKER_PORT", "MQTT_CLIENT_ID",
 		"PUBLISH_TOPIC", "SUBSCRIBE_TOPIC",
 		"DEFAULT_DISPLAY_DURATION", "DEFAULT_TARGET_DISPLAY_COUNT",
+		"DISPLAY_WIDTH",
 		"IDLE_MESSAGE", "IDLE_MODE", "IDLE_PUBLISH_INTERVAL",
 		"SCHEDULER_ENABLED",
 	} {
@@ -124,6 +127,10 @@ func applyKey(cfg *Config, key, val string) {
 		if n, err := strconv.Atoi(val); err == nil {
 			cfg.DefaultTargetDisplayCount = n
 		}
+	case "DISPLAY_WIDTH":
+		if n, err := strconv.Atoi(val); err == nil {
+			cfg.DisplayWidth = n
+		}
 	case "IDLE_MESSAGE":
 		cfg.IdleMessage = val
 	case "IDLE_MODE":
@@ -149,6 +156,7 @@ func (c Config) Log() {
 	log.Printf("  SUBSCRIBE_TOPIC=%q", c.SubscribeTopic)
 	log.Printf("  DEFAULT_DISPLAY_DURATION=%d", c.DefaultDisplayDuration)
 	log.Printf("  DEFAULT_TARGET_DISPLAY_COUNT=%d", c.DefaultTargetDisplayCount)
+	log.Printf("  DISPLAY_WIDTH=%d", c.DisplayWidth)
 	log.Printf("  IDLE_MESSAGE=%q", c.IdleMessage)
 	log.Printf("  IDLE_MODE=%q", c.IdleMode)
 	log.Printf("  IDLE_PUBLISH_INTERVAL=%d", c.IdlePublishInterval)
@@ -165,6 +173,7 @@ func (c Config) String() string {
 	fmt.Fprintf(&sb, "SUBSCRIBE_TOPIC=%s\n", c.SubscribeTopic)
 	fmt.Fprintf(&sb, "DEFAULT_DISPLAY_DURATION=%d\n", c.DefaultDisplayDuration)
 	fmt.Fprintf(&sb, "DEFAULT_TARGET_DISPLAY_COUNT=%d\n", c.DefaultTargetDisplayCount)
+	fmt.Fprintf(&sb, "DISPLAY_WIDTH=%d\n", c.DisplayWidth)
 	fmt.Fprintf(&sb, "IDLE_MESSAGE=%s\n", c.IdleMessage)
 	fmt.Fprintf(&sb, "IDLE_MODE=%s\n", c.IdleMode)
 	fmt.Fprintf(&sb, "IDLE_PUBLISH_INTERVAL=%d\n", c.IdlePublishInterval)

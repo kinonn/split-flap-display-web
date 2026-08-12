@@ -288,6 +288,9 @@ SUBSCRIBE_TOPIC=splitflap/splitflap/state
 DEFAULT_DISPLAY_DURATION=10
 DEFAULT_TARGET_DISPLAY_COUNT=3
 
+# Number of modules on the display; used to pad "align": "center" / "right" messages
+DISPLAY_WIDTH=12
+
 # Idle behavior: "publish" publishes IDLE_MESSAGE repeatedly; "keep" leaves the display alone
 IDLE_MODE=keep
 IDLE_MESSAGE=WELCOME
@@ -306,6 +309,7 @@ SCHEDULER_ENABLED=true
 | `SUBSCRIBE_TOPIC` | Topic to receive display state | `splitflap/splitflap/state` |
 | `DEFAULT_DISPLAY_DURATION` | Seconds each message stays up | `10` |
 | `DEFAULT_TARGET_DISPLAY_COUNT` | How many times each new message is shown | `3` |
+| `DISPLAY_WIDTH` | Number of modules; used to pad `align: center/right` messages | `12` |
 | `IDLE_MODE` | `publish` (idle message) or `keep` (last shown) | `keep` |
 | `IDLE_MESSAGE` | Message shown in idle state | `WELCOME` |
 | `IDLE_PUBLISH_INTERVAL` | Seconds between idle republishes | `20` |
@@ -353,6 +357,7 @@ All fields except `text` are optional:
 | `target_display_count` | int | How many times to show the message. Defaults to `DEFAULT_TARGET_DISPLAY_COUNT`. |
 | `display_duration` | int | Seconds each show lasts. Defaults to `DEFAULT_DISPLAY_DURATION`. |
 | `priority` | `"normal"` \| `"high"` | `"high"` jumps the queue. Defaults to `"normal"`. |
+| `align` | `"left"` \| `"center"` \| `"right"` | Pads the text with spaces to `DISPLAY_WIDTH` modules before publishing. `"left"` (default) publishes as-is. E.g. `{"text": "31C", "align": "center"}` shows `31C` centered on the display. The padding is applied at publish time only — history/queue views keep the clean text. |
 
 Returns `{ "status": "ok", "id": "<uuid>" }` on success.
 

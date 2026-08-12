@@ -28,6 +28,7 @@ type Scheduler struct {
 	publishTopic          string
 	defaultDisplayDur     int
 	defaultTargetCount    int
+	displayWidth          int
 	idleMessage           string
 	idleMode              string
 	idleInterval          int
@@ -54,6 +55,7 @@ type Scheduler struct {
 func New(mq *mqttclient.Client,
 	publishTopic string,
 	defaultDisplayDur, defaultTargetCount int,
+	displayWidth int,
 	idleMessage, idleMode string,
 	idleInterval int,
 ) *Scheduler {
@@ -62,6 +64,7 @@ func New(mq *mqttclient.Client,
 		publishTopic:       publishTopic,
 		defaultDisplayDur:  defaultDisplayDur,
 		defaultTargetCount: defaultTargetCount,
+		displayWidth:       displayWidth,
 		idleMessage:        idleMessage,
 		idleMode:           idleMode,
 		idleInterval:       idleInterval,
@@ -170,9 +173,14 @@ func (s *Scheduler) HistorySnapshot() []models.HistoryEntry {
 // AddMessage validates the input, creates a new Message in the store,
 // records history, wakes the scheduler if idle, and notifies SSE
 // subscribers. It returns the new message ID and a validation error.
-func (s *Scheduler) AddMessage(text string, targetDisplayCount, displayDuration *int, priority *models.Priority, user string) (string, error) {
+// align is a rendering hint: "" (or "left"), "center" or "right".
+func (s *Scheduler) AddMessage(text string, targetDisplayCount, displayDuration *int, priority *models.Priority, user, align string) (string, error) {
 	if strings.TrimSpace(text) == "" {
 		return "", validationError("text must be non-empty")
+	}
+	align, ok := models.ParseAlign(align)
+	if !ok {
+		return "", validationError("align must be 'left', 'center' or 'right'")
 	}
 	tdc := s.defaultTargetCount
 	if targetDisplayCount != nil {
@@ -196,7 +204,7 @@ func (s *Scheduler) AddMessage(text string, targetDisplayCount, displayDuration 
 		pr = *priority
 	}
 
-	m := models.NewMessage(strings.TrimSpace(text), tdc, dd, pr, user)
+	m := models.NewMessage(strings.TrimSpace(text), tdc, dd, pr, user, align)
 	s.store.Add(m)
 	s.recordHistory(m)
 	s.signalWakeup()
@@ -400,7 +408,7 @@ func (s *Scheduler) schedulerTick(ctx context.Context) error {
 	s.notify(queue.Event{Name: "current", Data: currData})
 
 	// Attempt publish.
-	if err := s.mq.Publish(s.publishTopic, m.Message, 0); err != nil {
+	if err := s.mq.Publish(s.publishTopic, s.publishPayload(m), 0); err != nil {
 		log.Printf("scheduler: publish failed: %v", err)
 		s.mu.Lock()
 		s.current = nil
@@ -564,6 +572,35 @@ func (s *Scheduler) Stop() {
 }
 
 // --- Helpers -------------------------------------------------------------
+
+// publishPayload returns the exact string that is sent to the MQTT broker
+// for a message: the stored text, optionally space-padded to the display
+// width when the message requests centering/right alignment. The stored
+// message itself is never modified, so history/queue views show the clean
+// text while the physical display gets the padded string.
+func (s *Scheduler) publishPayload(m *models.Message) string {
+	return padToWidth(m.Message, m.Align, s.displayWidth)
+}
+
+// padToWidth left-pads/right-pads text with spaces so it aligns on a
+// display of the given width. Padding is skipped when the text already
+// fills or exceeds the width, when the width is not positive, or when
+// align is empty/"left". Odd remainders are left-biased ("    31C     "
+// for width 12, text "31C").
+func padToWidth(text, align string, width int) string {
+	if width <= 0 || len(text) >= width {
+		return text
+	}
+	switch align {
+	case "center":
+		left := (width - len(text)) / 2
+		return strings.Repeat(" ", left) + text + strings.Repeat(" ", width-len(text)-left)
+	case "right":
+		return strings.Repeat(" ", width-len(text)) + text
+	default:
+		return text
+	}
+}
 
 func ptrToDTO(m *models.Message) *models.MessageDTO {
 	if m == nil {

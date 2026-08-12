@@ -38,6 +38,7 @@ The server reads configuration from a file named `app.conf` located in the same 
 | `SUBSCRIBE_TOPIC` | string | `"splitflap/splitflap/state"` | MQTT topic to subscribe for display state feedback |
 | `DEFAULT_DISPLAY_DURATION` | int | `10` | Default seconds each message stays on the display per cycle |
 | `DEFAULT_TARGET_DISPLAY_COUNT` | int | `6` | Default number of times each message should be displayed before completion |
+| `DISPLAY_WIDTH` | int | `12` | Number of modules on the display; used to pad `align: center/right` messages |
 | `IDLE_MESSAGE` | string | `"WELCOME"` | Message to publish when the scheduler is idle (in "publish" mode) |
 | `IDLE_MODE` | string | `"publish"` | Idle behavior: `"publish"` repeatedly sends IDLE_MESSAGE; `"keep"` does nothing |
 | `IDLE_PUBLISH_INTERVAL` | int | `10` | Seconds between idle message re-publishes |
@@ -72,6 +73,7 @@ A `Message` represents a text to be shown on the split-flap display.
 | `display_count` | int | Number of times the message has been displayed so far (starts at 0) |
 | `last_displayed_at` | datetime or null | Timestamp of the most recent display cycle |
 | `priority` | Priority | `"normal"` or `"high"` |
+| `align` | string | Publish-time rendering hint: `""`/`"left"` (no padding), `"center"`, or `"right"`. Not serialized to clients (`json:"-"`); padding is applied to the MQTT payload only. |
 | `user` | string | Username who submitted the message (extracted from auth header or `"unknown"`) |
 
 ### 3.2 MessageStatus (Enum)
@@ -239,14 +241,15 @@ Each entry is:
 ```
 New entries are prepended (most recent first). Maximum 50 entries.
 
-### 6.4 add_message(text, target_display_count?, display_duration?, priority?, user?)
+### 6.4 add_message(text, target_display_count?, display_duration?, priority?, user?, align?)
 
 1. Validate:
    - `text` must be non-empty after stripping whitespace → else return error `"text must be non-empty"`
    - `target_display_count` (if provided) must be > 0 → else error `"target_display_count must be > 0"`
    - `display_duration` (if provided) must be > 0 → else error `"display_duration must be > 0"`
    - `priority` must be `"normal"` or `"high"` → else error `"priority must be 'normal' or 'high'"`
-2. Apply defaults: use configured defaults for `target_display_count` and `display_duration` if not provided.
+   - `align` (if provided) must be `"left"`, `"center"` or `"right"` (case-insensitive) → else error `"align must be 'left', 'center' or 'right'"`
+2. Apply defaults: use configured defaults for `target_display_count` and `display_duration` if not provided. `align` defaults to `""` (no padding).
 3. Create a new Message with:
    - New random UUID
    - `status` = `"Pending"`
