@@ -56,6 +56,10 @@ The server starts on `http://localhost:8100`. Logs every resolved config
 value at startup. Point `MQTT_BROKER_HOST`/`MQTT_BROKER_PORT` at your broker
 either via the environment or by editing `app.conf`.
 
+HTTP request logs are emitted only for unsuccessful (4xx/5xx) or unusually
+slow (>500ms) requests, keeping the access log quiet for the frequent
+polling/SSE traffic.
+
 ## Build
 
 ```bash

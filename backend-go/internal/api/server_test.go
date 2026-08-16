@@ -3,7 +3,9 @@ package api
 import (
 	"bytes"
 	"encoding/json"
+	"log"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/gofiber/fiber/v2"
@@ -131,5 +133,64 @@ func TestPublishPayloadFieldIgnored(t *testing.T) {
 	}
 	if resp.StatusCode != 200 {
 		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+}
+
+// redirectLogOutput captures log output during the test and restores the
+// original writer afterwards, so the request-logger assertions can inspect
+// what was (or was not) emitted.
+func redirectLogOutput(t *testing.T, buf *bytes.Buffer) {
+	t.Helper()
+	old := log.Writer()
+	log.SetOutput(buf)
+	t.Cleanup(func() { log.SetOutput(old) })
+}
+
+// A successful, fast request (e.g. GET /api/config) must not produce any
+// access-log output.
+func TestRequestLoggerSilencesSuccess(t *testing.T) {
+	app := newTestApp()
+
+	var buf bytes.Buffer
+	redirectLogOutput(t, &buf)
+
+	req := httptest.NewRequest("GET", "/api/config", nil)
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != 200 {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+	if out := buf.String(); out != "" {
+		t.Errorf("successful request produced log output: %q", out)
+	}
+}
+
+// A failed request (e.g. an invalid publish) must produce a single access-log
+// line containing the status code and the request path.
+func TestRequestLoggerLogsErrors(t *testing.T) {
+	app := newTestApp()
+
+	var buf bytes.Buffer
+	redirectLogOutput(t, &buf)
+
+	req := httptest.NewRequest("POST", "/api/publish",
+		bytes.NewBufferString(`{"text":"HI","align":"middle"}`))
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != 400 {
+		t.Fatalf("status = %d, want 400", resp.StatusCode)
+	}
+	out := buf.String()
+	if out == "" {
+		t.Fatal("error request produced no log output")
+	}
+	if !strings.Contains(out, "400") || !strings.Contains(out, "/api/publish") {
+		t.Errorf("log output = %q, want it to contain status 400 and path", out)
 	}
 }

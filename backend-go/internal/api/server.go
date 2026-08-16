@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/fiber/v2/middleware/logger"
 
 	"splitflap-web/internal/config"
 	"splitflap-web/internal/models"
@@ -29,6 +28,33 @@ type Server struct {
 	StaticDir string
 }
 
+// slowRequestThreshold is the latency above which a successful request is
+// considered noteworthy and logged. Ordinary fast requests are not logged at
+// all; only errors (non-2xx) and slow requests appear in the access log.
+const slowRequestThreshold = 500 * time.Millisecond
+
+// requestLogger emits an access log line only for requests that are either
+// unsuccessful (status >= 400) or unusually slow, keeping the logs quiet while
+// preserving error and performance visibility. The SSE stream is long-lived by
+// design, so it is excluded from the slow-request log (but still logged if it
+// fails with a non-2xx status).
+func requestLogger() fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		start := time.Now()
+		err := c.Next()
+		status := c.Response().StatusCode()
+		latency := time.Since(start)
+
+		isSSE := c.Path() == "/api/scheduler/stream"
+		if status >= 400 || (latency > slowRequestThreshold && !isSSE) {
+			log.Printf("%s | %d | %s | %s | %s | %s",
+				time.Now().Format("15:04:05"), status, latency,
+				c.IP(), c.Method(), c.Path())
+		}
+		return err
+	}
+}
+
 // New returns a Fiber app with all routes wired up.
 func New(s *Server) *fiber.App {
 	app := fiber.New(fiber.Config{
@@ -37,7 +63,7 @@ func New(s *Server) *fiber.App {
 		WriteTimeout: 0, // streaming endpoints cannot have a write timeout
 		IdleTimeout:  60 * time.Second,
 	})
-	app.Use(logger.New())
+	app.Use(requestLogger())
 
 	app.Get("/api/config", s.handleConfig)
 	app.Post("/api/publish", s.handlePublish)
