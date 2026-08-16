@@ -23,8 +23,13 @@ func newFakeMQ() *mqttclient.Client {
 func TestAddValidation(t *testing.T) {
 	s := New(newFakeMQ(), "pub", 10, 6, 12, "WELCOME", "keep", 1)
 
-	if _, err := s.AddMessage("   ", nil, nil, nil, "u", ""); err == nil {
-		t.Fatal("expect error for empty text")
+	// Empty and whitespace-only messages are now accepted (they render as a
+	// blank display); only the other fields are validated.
+	if _, err := s.AddMessage("", nil, nil, nil, "u", ""); err != nil {
+		t.Fatalf("empty text should be accepted: %v", err)
+	}
+	if _, err := s.AddMessage("   ", nil, nil, nil, "u", ""); err != nil {
+		t.Fatalf("whitespace text should be accepted as-is: %v", err)
 	}
 	tdc := 0
 	if _, err := s.AddMessage("hi", &tdc, nil, nil, "u", ""); err == nil {
@@ -246,5 +251,15 @@ func TestPublishPayloadAlign(t *testing.T) {
 	idL, _ := s.AddMessage("OK", nil, nil, nil, "u", "")
 	if got := s.publishPayload(s.store.Get(idL)); got != "OK" {
 		t.Errorf("default payload = %q", got)
+	}
+
+	// Empty message -> string of spaces filling the display width (clears
+	// the display). The stored message stays empty (as-is).
+	idE, _ := s.AddMessage("", nil, nil, nil, "u", "")
+	if got := s.publishPayload(s.store.Get(idE)); got != "            " {
+		t.Errorf("empty payload = %q", got)
+	}
+	if got := s.store.Get(idE).Message; got != "" {
+		t.Errorf("empty message should be stored as-is, got %q", got)
 	}
 }

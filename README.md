@@ -352,8 +352,7 @@ All fields except `text` are optional:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `text` | string | The message to display. May also be sent as `payload` for compatibility. |
-| `payload` | string | Alias for `text`; used if `text` is not provided. |
+| `text` | string | The message to display. Optional — an empty string renders a blank display (a string of spaces filling `DISPLAY_WIDTH`). Sent as-is and never trimmed. |
 | `target_display_count` | int | How many times to show the message. Defaults to `DEFAULT_TARGET_DISPLAY_COUNT`. |
 | `display_duration` | int | Seconds each show lasts. Defaults to `DEFAULT_DISPLAY_DURATION`. |
 | `priority` | `"normal"` \| `"high"` | `"high"` jumps the queue. Defaults to `"normal"`. |

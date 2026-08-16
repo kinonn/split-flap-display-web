@@ -38,7 +38,7 @@ The server reads configuration from a file named `app.conf` located in the same 
 | `SUBSCRIBE_TOPIC` | string | `"splitflap/splitflap/state"` | MQTT topic to subscribe for display state feedback |
 | `DEFAULT_DISPLAY_DURATION` | int | `10` | Default seconds each message stays on the display per cycle |
 | `DEFAULT_TARGET_DISPLAY_COUNT` | int | `6` | Default number of times each message should be displayed before completion |
-| `DISPLAY_WIDTH` | int | `12` | Number of modules on the display; used to pad `align: center/right` messages |
+| `DISPLAY_WIDTH` | int | `12` | Number of modules on the display; used to pad `align: center/right` messages and to render empty messages as a blank display (a string of `DISPLAY_WIDTH` spaces) |
 | `IDLE_MESSAGE` | string | `"WELCOME"` | Message to publish when the scheduler is idle (in "publish" mode) |
 | `IDLE_MODE` | string | `"publish"` | Idle behavior: `"publish"` repeatedly sends IDLE_MESSAGE; `"keep"` does nothing |
 | `IDLE_PUBLISH_INTERVAL` | int | `10` | Seconds between idle message re-publishes |
@@ -244,7 +244,7 @@ New entries are prepended (most recent first). Maximum 50 entries.
 ### 6.4 add_message(text, target_display_count?, display_duration?, priority?, user?, align?)
 
 1. Validate:
-   - `text` must be non-empty after stripping whitespace → else return error `"text must be non-empty"`
+   - `text` may be empty; an empty message is accepted and displayed as a string of spaces filling `DISPLAY_WIDTH` (i.e. it clears the display). The received text is used as-is — it is not trimmed.
    - `target_display_count` (if provided) must be > 0 → else error `"target_display_count must be > 0"`
    - `display_duration` (if provided) must be > 0 → else error `"display_duration must be > 0"`
    - `priority` must be `"normal"` or `"high"` → else error `"priority must be 'normal' or 'high'"`
@@ -412,14 +412,13 @@ Submit a new message to the scheduler queue.
 ```json
 {
   "text": "HELLO",
-  "payload": "HELLO",
   "target_display_count": 3,
   "display_duration": 10,
   "priority": "normal"
 }
 ```
 
-- `text` and `payload` are both optional; the server uses whichever is non-null/non-empty (preferring `text`). At least one must be provided and non-empty after stripping whitespace.
+- `text`: the message to display. Optional — an empty string is accepted and renders as a blank display (a string of spaces filling `DISPLAY_WIDTH`). The text is used exactly as received and is not trimmed.
 - `target_display_count`: optional int, defaults to configured value.
 - `display_duration`: optional int, defaults to configured value.
 - `priority`: optional string, `"normal"` (default) or `"high"`.
@@ -432,8 +431,7 @@ Submit a new message to the scheduler queue.
 ```
 
 **Error Responses**:
-- 400: `"text must be non-empty"` if both text and payload are empty/null.
-- 400: Validation errors from the scheduler (e.g., invalid target_display_count, display_duration, or priority).
+- 400: Validation errors from the scheduler (e.g., invalid target_display_count, display_duration, priority, or align).
 - 503: `"scheduler not ready"` if the scheduler has not been initialized.
 
 ### 7.4 GET /api/messages/current

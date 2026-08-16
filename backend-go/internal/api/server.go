@@ -74,7 +74,6 @@ func (s *Server) handleConfig(c *fiber.Ctx) error {
 
 type publishRequest struct {
 	Text               string  `json:"text"`
-	Payload            string  `json:"payload"`
 	TargetDisplayCount *int    `json:"target_display_count"`
 	DisplayDuration    *int    `json:"display_duration"`
 	Priority           *string `json:"priority"`
@@ -88,11 +87,9 @@ func (s *Server) handlePublish(c *fiber.Ctx) error {
 		_ = err
 	}
 
-	// Determine text: prefer "text", fall back to "payload".
-	text := strings.TrimSpace(req.Text)
-	if text == "" {
-		text = strings.TrimSpace(req.Payload)
-	}
+	// The message text is used exactly as received: no trimming, no fallback.
+	// An empty string is valid and displays as a blank (space-filled) display.
+	text := req.Text
 
 	var priority *models.Priority
 	if req.Priority != nil {
@@ -132,8 +129,6 @@ func (s *Server) handlePublish(c *fiber.Ctx) error {
 		switch {
 		case ok:
 			return sendError(c, 400, ve.Error())
-		case text == "":
-			return sendError(c, 400, "text must be non-empty")
 		default:
 			return sendError(c, 500, err.Error())
 		}

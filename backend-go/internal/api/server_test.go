@@ -88,3 +88,48 @@ func TestPublishLegacyPayloadNoAlign(t *testing.T) {
 		t.Fatalf("status = %d, want 200", resp.StatusCode)
 	}
 }
+
+// An empty text is accepted and queued (it renders as a blank display).
+func TestPublishEmptyAccepted(t *testing.T) {
+	app := newTestApp()
+
+	req := httptest.NewRequest("POST", "/api/publish",
+		bytes.NewBufferString(`{"text":""}`))
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != 200 {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+	var out struct {
+		Status string `json:"status"`
+		ID     string `json:"id"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		t.Fatal(err)
+	}
+	if out.Status != "ok" || out.ID == "" {
+		t.Errorf("response = %+v", out)
+	}
+}
+
+// The legacy `payload` field is no longer used: a payload-only request is
+// treated as an empty message (renders as a blank display).
+func TestPublishPayloadFieldIgnored(t *testing.T) {
+	app := newTestApp()
+
+	req := httptest.NewRequest("POST", "/api/publish",
+		bytes.NewBufferString(`{"payload":"HI"}`))
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != 200 {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+}

@@ -175,9 +175,8 @@ func (s *Scheduler) HistorySnapshot() []models.HistoryEntry {
 // subscribers. It returns the new message ID and a validation error.
 // align is a rendering hint: "" (or "left"), "center" or "right".
 func (s *Scheduler) AddMessage(text string, targetDisplayCount, displayDuration *int, priority *models.Priority, user, align string) (string, error) {
-	if strings.TrimSpace(text) == "" {
-		return "", validationError("text must be non-empty")
-	}
+	// An empty text is valid: at display time it is rendered as a string of
+	// spaces filling the display width (effectively clearing the display).
 	align, ok := models.ParseAlign(align)
 	if !ok {
 		return "", validationError("align must be 'left', 'center' or 'right'")
@@ -204,7 +203,7 @@ func (s *Scheduler) AddMessage(text string, targetDisplayCount, displayDuration 
 		pr = *priority
 	}
 
-	m := models.NewMessage(strings.TrimSpace(text), tdc, dd, pr, user, align)
+	m := models.NewMessage(text, tdc, dd, pr, user, align)
 	s.store.Add(m)
 	s.recordHistory(m)
 	s.signalWakeup()
@@ -575,10 +574,18 @@ func (s *Scheduler) Stop() {
 
 // publishPayload returns the exact string that is sent to the MQTT broker
 // for a message: the stored text, optionally space-padded to the display
-// width when the message requests centering/right alignment. The stored
-// message itself is never modified, so history/queue views show the clean
-// text while the physical display gets the padded string.
+// width when the message requests centering/right alignment. An empty
+// message is sent as a string of spaces filling the display width, which
+// effectively clears the display. The stored message itself is never
+// modified, so history/queue views show the clean text while the physical
+// display gets the rendered string.
 func (s *Scheduler) publishPayload(m *models.Message) string {
+	if m.Message == "" {
+		if s.displayWidth <= 0 {
+			return ""
+		}
+		return strings.Repeat(" ", s.displayWidth)
+	}
 	return padToWidth(m.Message, m.Align, s.displayWidth)
 }
 
