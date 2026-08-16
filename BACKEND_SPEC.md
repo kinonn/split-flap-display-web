@@ -293,7 +293,9 @@ This is the core loop iteration. Each tick:
 2. **If no message is selected** → call `_handle_idle()` and return.
 3. Set `_current` = selected message.
 4. Notify subscribers: `{"type": "current", "message": <message.to_dict()>}`.
-5. Publish the message text to MQTT on `publish_topic` with QoS 0.
+5. Publish the rendered payload to MQTT on `publish_topic` with QoS 0 — the
+   message text padded per `align`, or a string of `DISPLAY_WIDTH` spaces if
+   the message is empty.
    - **If publish fails**:
      - Log a warning.
      - Set `_current` = null.
@@ -422,6 +424,7 @@ Submit a new message to the scheduler queue.
 - `target_display_count`: optional int, defaults to configured value.
 - `display_duration`: optional int, defaults to configured value.
 - `priority`: optional string, `"normal"` (default) or `"high"`.
+- `align`: optional string, `"left"` (default), `"center"` or `"right"` — pads the text with spaces to `DISPLAY_WIDTH` at publish time.
 
 **User Extraction**: Read the `Cf-Access-Authenticated-User-Email` header. If present, extract the part before `@` as the username. If absent, use `"unknown"`.
 

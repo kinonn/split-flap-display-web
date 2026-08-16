@@ -18,6 +18,8 @@ web framework. The source lives under [`backend-go/`](backend-go/).
 - **Queue management**: View, remove, and inspect the live queue and a rolling
   message history (last 50 submissions) without leaving the page.
 - **Priority**: Toggle "High priority" to jump the queue.
+- **Clear display**: Blank the physical display with one click (queues an empty
+  message).
 - **MQTT integration**: Publishes commands to the display and subscribes to its
   state topic.
 - **Small static binary**: the Go backend ships as a single ~15 MB binary with
@@ -289,6 +291,7 @@ DEFAULT_DISPLAY_DURATION=10
 DEFAULT_TARGET_DISPLAY_COUNT=3
 
 # Number of modules on the display; used to pad "align": "center" / "right" messages
+# and to render empty messages as a blank display
 DISPLAY_WIDTH=12
 
 # Idle behavior: "publish" publishes IDLE_MESSAGE repeatedly; "keep" leaves the display alone
@@ -309,7 +312,7 @@ SCHEDULER_ENABLED=true
 | `SUBSCRIBE_TOPIC` | Topic to receive display state | `splitflap/splitflap/state` |
 | `DEFAULT_DISPLAY_DURATION` | Seconds each message stays up | `10` |
 | `DEFAULT_TARGET_DISPLAY_COUNT` | How many times each new message is shown | `3` |
-| `DISPLAY_WIDTH` | Number of modules; used to pad `align: center/right` messages | `12` |
+| `DISPLAY_WIDTH` | Number of modules; used to pad `align: center/right` messages and render empty messages as a blank display | `12` |
 | `IDLE_MODE` | `publish` (idle message) or `keep` (last shown) | `keep` |
 | `IDLE_MESSAGE` | Message shown in idle state | `WELCOME` |
 | `IDLE_PUBLISH_INTERVAL` | Seconds between idle republishes | `20` |
