@@ -5,6 +5,7 @@ const validCharsEl = document.getElementById("valid-chars");
 const inputEl = document.getElementById("message-input");
 const priorityToggleEl = document.getElementById("priority-toggle");
 const quickSendForm = document.getElementById("quick-send");
+const clearDisplayBtn = document.getElementById("clear-display");
 const charCountEl = document.getElementById("char-count");
 const messageHistoryEl = document.getElementById("message-history");
 const queueListEl = document.getElementById("queue-list");
@@ -197,19 +198,18 @@ function showStatus(text, type) {
     }
 }
 
-async function sendMessage(payload, priority) {
-    if (!payload) return;
+async function sendMessage(payload, priority, successText) {
     try {
         const res = await fetch("/api/publish", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ payload, priority }),
+            body: JSON.stringify({ text: payload, priority }),
         });
         if (res.ok) {
             renderInputText("");
             previousValue = "";
             priorityToggleEl.checked = false;
-            showStatus("\u2713 Queued", "success");
+            showStatus(successText || "\u2713 Queued", "success");
             // No need to refetch — the server's SSE `queue` and `history`
             // events will deliver the new state.
         } else {
@@ -225,7 +225,12 @@ quickSendForm.addEventListener("submit", (e) => {
     e.preventDefault();
     const payload = getInputValue().trim();
     const priority = priorityToggleEl.checked ? "high" : "normal";
+    if (!payload) return; // ignore empty submissions on the Queue button
     sendMessage(payload, priority);
+});
+
+clearDisplayBtn.addEventListener("click", () => {
+    sendMessage("", "normal", "\u2713 Cleared");
 });
 
 function renderQueue(messages) {
@@ -380,6 +385,7 @@ inputEl.addEventListener("keydown", (e) => {
         e.preventDefault();
         const payload = getInputValue().trim();
         const priority = priorityToggleEl.checked ? "high" : "normal";
+        if (!payload) return; // ignore empty submissions
         sendMessage(payload, priority);
     }
 });

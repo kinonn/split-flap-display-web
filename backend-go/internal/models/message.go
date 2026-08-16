@@ -47,6 +47,22 @@ func ParsePriority(s string) (Priority, bool) {
 	}
 }
 
+// ParseAlign validates an alignment value. Empty or "left" means no padding
+// (the current behaviour); "center" and "right" pad the text to the display
+// width at publish time. Unknown values return ok=false.
+func ParseAlign(s string) (string, bool) {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "", "left":
+		return "", true
+	case "center":
+		return "center", true
+	case "right":
+		return "right", true
+	default:
+		return "", false
+	}
+}
+
 // Message represents a single queue entry destined for the display.
 type Message struct {
 	ID                 string        `json:"id"`
@@ -59,11 +75,14 @@ type Message struct {
 	LastDisplayedAt    *time.Time    `json:"-"`
 	Priority           Priority      `json:"priority"`
 	User               string        `json:"user"`
+	// Align is a publish-time rendering hint ("", "center" or "right"); it is
+	// not part of the JSON API surface.
+	Align string `json:"-"`
 }
 
 // NewMessage constructs a Message with sensible defaults, generating a
 // new UUID and the current timestamp.
-func NewMessage(text string, targetDisplayCount, displayDuration int, priority Priority, user string) *Message {
+func NewMessage(text string, targetDisplayCount, displayDuration int, priority Priority, user, align string) *Message {
 	return &Message{
 		ID:                 uuid.NewString(),
 		Message:            text,
@@ -75,6 +94,7 @@ func NewMessage(text string, targetDisplayCount, displayDuration int, priority P
 		LastDisplayedAt:    nil,
 		Priority:           priority,
 		User:               user,
+		Align:              align,
 	}
 }
 

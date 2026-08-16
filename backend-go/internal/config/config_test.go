@@ -26,6 +26,9 @@ func TestDefaults(t *testing.T) {
 	if cfg.DefaultTargetDisplayCount != 6 {
 		t.Errorf("tdc = %d", cfg.DefaultTargetDisplayCount)
 	}
+	if cfg.DisplayWidth != 12 {
+		t.Errorf("width = %d", cfg.DisplayWidth)
+	}
 	if !cfg.SchedulerEnabled {
 		t.Errorf("scheduler_enabled = %v", cfg.SchedulerEnabled)
 	}

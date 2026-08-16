@@ -420,6 +420,19 @@ body {
     background: #14559e;
 }
 
+.queue-btn-clear {
+    background: #5f6368;
+}
+
+.queue-btn-clear:hover {
+    background: #4e5156;
+    box-shadow: 0 1px 4px rgba(95, 99, 104, 0.4);
+}
+
+.queue-btn-clear:active {
+    background: #414448;
+}
+
 .admin {
     width: 100%;
     max-width: 640px;

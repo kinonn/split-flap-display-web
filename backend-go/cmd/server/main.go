@@ -29,7 +29,7 @@ func main() {
 	staticDir := "frontend/static"
 
 	mq := mqttclient.New(cfg.MQTTBrokerHost, cfg.MQTTBrokerPort, cfg.MQTTClientID, cfg.SubscribeTopic)
-	sched := scheduler.New(mq, cfg.PublishTopic, cfg.DefaultDisplayDuration, cfg.DefaultTargetDisplayCount, cfg.IdleMessage, cfg.IdleMode, cfg.IdlePublishInterval)
+	sched := scheduler.New(mq, cfg.PublishTopic, cfg.DefaultDisplayDuration, cfg.DefaultTargetDisplayCount, cfg.DisplayWidth, cfg.IdleMessage, cfg.IdleMode, cfg.IdlePublishInterval)
 
 	rootCtx, cancelRoot := context.WithCancel(context.Background())
 	defer cancelRoot()

@@ -10,6 +10,9 @@ SUBSCRIBE_TOPIC=splitflap/splitflap/state
 DEFAULT_DISPLAY_DURATION=10
 DEFAULT_TARGET_DISPLAY_COUNT=3
 
+# Number of modules on the display; used to pad "align": "center" / "right" messages
+DISPLAY_WIDTH=12
+
 # Idle behavior: "publish" publishes IDLE_MESSAGE repeatedly; "keep" leaves the display alone
 IDLE_MODE=keep
 IDLE_MESSAGE=WELCOME

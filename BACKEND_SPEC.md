@@ -38,6 +38,7 @@ The server reads configuration from a file named `app.conf` located in the same 
 | `SUBSCRIBE_TOPIC` | string | `"splitflap/splitflap/state"` | MQTT topic to subscribe for display state feedback |
 | `DEFAULT_DISPLAY_DURATION` | int | `10` | Default seconds each message stays on the display per cycle |
 | `DEFAULT_TARGET_DISPLAY_COUNT` | int | `6` | Default number of times each message should be displayed before completion |
+| `DISPLAY_WIDTH` | int | `12` | Number of modules on the display; used to pad `align: center/right` messages and to render empty messages as a blank display (a string of `DISPLAY_WIDTH` spaces) |
 | `IDLE_MESSAGE` | string | `"WELCOME"` | Message to publish when the scheduler is idle (in "publish" mode) |
 | `IDLE_MODE` | string | `"publish"` | Idle behavior: `"publish"` repeatedly sends IDLE_MESSAGE; `"keep"` does nothing |
 | `IDLE_PUBLISH_INTERVAL` | int | `10` | Seconds between idle message re-publishes |
@@ -72,6 +73,7 @@ A `Message` represents a text to be shown on the split-flap display.
 | `display_count` | int | Number of times the message has been displayed so far (starts at 0) |
 | `last_displayed_at` | datetime or null | Timestamp of the most recent display cycle |
 | `priority` | Priority | `"normal"` or `"high"` |
+| `align` | string | Publish-time rendering hint: `""`/`"left"` (no padding), `"center"`, or `"right"`. Not serialized to clients (`json:"-"`); padding is applied to the MQTT payload only. |
 | `user` | string | Username who submitted the message (extracted from auth header or `"unknown"`) |
 
 ### 3.2 MessageStatus (Enum)
@@ -239,14 +241,15 @@ Each entry is:
 ```
 New entries are prepended (most recent first). Maximum 50 entries.
 
-### 6.4 add_message(text, target_display_count?, display_duration?, priority?, user?)
+### 6.4 add_message(text, target_display_count?, display_duration?, priority?, user?, align?)
 
 1. Validate:
-   - `text` must be non-empty after stripping whitespace → else return error `"text must be non-empty"`
+   - `text` may be empty; an empty message is accepted and displayed as a string of spaces filling `DISPLAY_WIDTH` (i.e. it clears the display). The received text is used as-is — it is not trimmed.
    - `target_display_count` (if provided) must be > 0 → else error `"target_display_count must be > 0"`
    - `display_duration` (if provided) must be > 0 → else error `"display_duration must be > 0"`
    - `priority` must be `"normal"` or `"high"` → else error `"priority must be 'normal' or 'high'"`
-2. Apply defaults: use configured defaults for `target_display_count` and `display_duration` if not provided.
+   - `align` (if provided) must be `"left"`, `"center"` or `"right"` (case-insensitive) → else error `"align must be 'left', 'center' or 'right'"`
+2. Apply defaults: use configured defaults for `target_display_count` and `display_duration` if not provided. `align` defaults to `""` (no padding).
 3. Create a new Message with:
    - New random UUID
    - `status` = `"Pending"`
@@ -290,7 +293,9 @@ This is the core loop iteration. Each tick:
 2. **If no message is selected** → call `_handle_idle()` and return.
 3. Set `_current` = selected message.
 4. Notify subscribers: `{"type": "current", "message": <message.to_dict()>}`.
-5. Publish the message text to MQTT on `publish_topic` with QoS 0.
+5. Publish the rendered payload to MQTT on `publish_topic` with QoS 0 — the
+   message text padded per `align`, or a string of `DISPLAY_WIDTH` spaces if
+   the message is empty.
    - **If publish fails**:
      - Log a warning.
      - Set `_current` = null.
@@ -409,17 +414,17 @@ Submit a new message to the scheduler queue.
 ```json
 {
   "text": "HELLO",
-  "payload": "HELLO",
   "target_display_count": 3,
   "display_duration": 10,
   "priority": "normal"
 }
 ```
 
-- `text` and `payload` are both optional; the server uses whichever is non-null/non-empty (preferring `text`). At least one must be provided and non-empty after stripping whitespace.
+- `text`: the message to display. Optional — an empty string is accepted and renders as a blank display (a string of spaces filling `DISPLAY_WIDTH`). The text is used exactly as received and is not trimmed.
 - `target_display_count`: optional int, defaults to configured value.
 - `display_duration`: optional int, defaults to configured value.
 - `priority`: optional string, `"normal"` (default) or `"high"`.
+- `align`: optional string, `"left"` (default), `"center"` or `"right"` — pads the text with spaces to `DISPLAY_WIDTH` at publish time.
 
 **User Extraction**: Read the `Cf-Access-Authenticated-User-Email` header. If present, extract the part before `@` as the username. If absent, use `"unknown"`.
 
@@ -429,8 +434,7 @@ Submit a new message to the scheduler queue.
 ```
 
 **Error Responses**:
-- 400: `"text must be non-empty"` if both text and payload are empty/null.
-- 400: Validation errors from the scheduler (e.g., invalid target_display_count, display_duration, or priority).
+- 400: Validation errors from the scheduler (e.g., invalid target_display_count, display_duration, priority, or align).
 - 503: `"scheduler not ready"` if the scheduler has not been initialized.
 
 ### 7.4 GET /api/messages/current

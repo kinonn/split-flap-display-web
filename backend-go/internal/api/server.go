@@ -74,10 +74,10 @@ func (s *Server) handleConfig(c *fiber.Ctx) error {
 
 type publishRequest struct {
 	Text               string  `json:"text"`
-	Payload            string  `json:"payload"`
 	TargetDisplayCount *int    `json:"target_display_count"`
 	DisplayDuration    *int    `json:"display_duration"`
 	Priority           *string `json:"priority"`
+	Align              *string `json:"align"`
 }
 
 func (s *Server) handlePublish(c *fiber.Ctx) error {
@@ -87,11 +87,9 @@ func (s *Server) handlePublish(c *fiber.Ctx) error {
 		_ = err
 	}
 
-	// Determine text: prefer "text", fall back to "payload".
-	text := strings.TrimSpace(req.Text)
-	if text == "" {
-		text = strings.TrimSpace(req.Payload)
-	}
+	// The message text is used exactly as received: no trimming, no fallback.
+	// An empty string is valid and displays as a blank (space-filled) display.
+	text := req.Text
 
 	var priority *models.Priority
 	if req.Priority != nil {
@@ -103,6 +101,15 @@ func (s *Server) handlePublish(c *fiber.Ctx) error {
 		priority = &pp
 	}
 
+	// align is optional; default (nil/empty/"left") means publish as-is.
+	// Validation happens in the scheduler, but we pre-validate here for a
+	// specific 400 message.
+	if req.Align != nil {
+		if _, ok := models.ParseAlign(*req.Align); !ok {
+			return sendError(c, 400, "align must be 'left', 'center' or 'right'")
+		}
+	}
+
 	user := "unknown"
 	if email := c.Get("Cf-Access-Authenticated-User-Email"); email != "" {
 		if i := strings.Index(email, "@"); i > 0 {
@@ -112,14 +119,16 @@ func (s *Server) handlePublish(c *fiber.Ctx) error {
 		}
 	}
 
-	id, err := s.Scheduler.AddMessage(text, req.TargetDisplayCount, req.DisplayDuration, priority, user)
+	var align string
+	if req.Align != nil {
+		align = *req.Align
+	}
+	id, err := s.Scheduler.AddMessage(text, req.TargetDisplayCount, req.DisplayDuration, priority, user, align)
 	if err != nil {
 		ve, ok := err.(*scheduler.ValidationError)
 		switch {
 		case ok:
 			return sendError(c, 400, ve.Error())
-		case text == "":
-			return sendError(c, 400, "text must be non-empty")
 		default:
 			return sendError(c, 500, err.Error())
 		}
