@@ -69,7 +69,7 @@ func (s *Store) MarkCompleted(id string) bool {
 	if !ok {
 		return false
 	}
-	m.Status = models.StatusCompleted
+	m.MarkCompleted()
 	return true
 }
 

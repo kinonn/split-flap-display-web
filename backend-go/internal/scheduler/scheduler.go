@@ -427,21 +427,14 @@ func (s *Scheduler) schedulerTick(ctx context.Context) error {
 	}
 
 	// Successful publish: record last_displayed_at, increment count,
-	// update status.
+	// update status. All mutations go through Message's locked methods so
+	// concurrent reader goroutines (ToDTO, queue snapshots) never tear reads.
 	now := time.Now()
 	s.store.Update(m.ID, func(mm *models.Message) {
-		mm.LastDisplayedAt = &now
-		mm.DisplayCount = mm.DisplayCount + 1
-		if mm.DisplayCount >= 1 && mm.Status == models.StatusPending {
-			mm.Status = models.StatusActive
-		}
+		mm.MarkDisplayed(now)
 	})
-	// After update, the in-memory `m` is the same stored pointer.
-	m.LastDisplayedAt = &now
-	m.DisplayCount = m.DisplayCount + 1
-	if m.DisplayCount >= 1 && m.Status == models.StatusPending {
-		m.Status = models.StatusActive
-	}
+	// After update, the in-memory `m` is the same stored pointer; the
+	// fields have been updated under the Message lock above.
 
 	// Emit current (with lastDisplayedAt).
 	currData2, _ := json.Marshal(struct {
@@ -465,9 +458,8 @@ func (s *Scheduler) schedulerTick(ctx context.Context) error {
 	}
 
 	// After dwell: check completion.
-	if m.DisplayCount >= m.TargetDisplayCount {
+	if m.DisplayCountSafe() >= m.TargetDisplayCount {
 		s.store.MarkCompleted(m.ID)
-		m.Status = models.StatusCompleted
 		s.mu.Lock()
 		s.current = nil
 		s.mu.Unlock()
