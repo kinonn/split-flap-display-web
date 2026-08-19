@@ -139,9 +139,12 @@ func (s *Server) handlePublish(c *fiber.Ctx) error {
 	user := "unknown"
 	if email := c.Get("Cf-Access-Authenticated-User-Email"); email != "" {
 		if i := strings.Index(email, "@"); i > 0 {
-			user = email[:i]
+			// strings.Clone owns the bytes: c.Get returns a byte-string that
+			// aliases fasthttp's reused header buffer, so a bare subslice
+			// would silently pick up later requests' header data.
+			user = strings.Clone(email[:i])
 		} else {
-			user = email
+			user = strings.Clone(email)
 		}
 	}
 
