@@ -371,6 +371,13 @@ func (s *Scheduler) SelectNextMessage() *models.Message {
 	if len(active) == 0 {
 		return nil
 	}
+	// Snapshot display counts under the per-message lock so the sort
+	// comparator never races with concurrent MarkDisplayed/MarkCompleted
+	// mutations and sees a consistent view.
+	counts := make(map[*models.Message]int, len(active))
+	for _, m := range active {
+		counts[m] = m.DisplayCountSafe()
+	}
 	sort.SliceStable(active, func(i, j int) bool {
 		ai, aj := active[i], active[j]
 		ri := -models.PriorityRank(ai.Priority)
@@ -378,8 +385,9 @@ func (s *Scheduler) SelectNextMessage() *models.Message {
 		if ri != rj {
 			return ri < rj
 		}
-		if ai.DisplayCount != aj.DisplayCount {
-			return ai.DisplayCount < aj.DisplayCount
+		ci, cj := counts[ai], counts[aj]
+		if ci != cj {
+			return ci < cj
 		}
 		return ai.CreatedAt.Before(aj.CreatedAt)
 	})
@@ -427,21 +435,14 @@ func (s *Scheduler) schedulerTick(ctx context.Context) error {
 	}
 
 	// Successful publish: record last_displayed_at, increment count,
-	// update status.
+	// update status. All mutations go through Message's locked methods so
+	// concurrent reader goroutines (ToDTO, queue snapshots) never tear reads.
 	now := time.Now()
 	s.store.Update(m.ID, func(mm *models.Message) {
-		mm.LastDisplayedAt = &now
-		mm.DisplayCount = mm.DisplayCount + 1
-		if mm.DisplayCount >= 1 && mm.Status == models.StatusPending {
-			mm.Status = models.StatusActive
-		}
+		mm.MarkDisplayed(now)
 	})
-	// After update, the in-memory `m` is the same stored pointer.
-	m.LastDisplayedAt = &now
-	m.DisplayCount = m.DisplayCount + 1
-	if m.DisplayCount >= 1 && m.Status == models.StatusPending {
-		m.Status = models.StatusActive
-	}
+	// After update, the in-memory `m` is the same stored pointer; the
+	// fields have been updated under the Message lock above.
 
 	// Emit current (with lastDisplayedAt).
 	currData2, _ := json.Marshal(struct {
@@ -465,9 +466,8 @@ func (s *Scheduler) schedulerTick(ctx context.Context) error {
 	}
 
 	// After dwell: check completion.
-	if m.DisplayCount >= m.TargetDisplayCount {
+	if m.DisplayCountSafe() >= m.TargetDisplayCount {
 		s.store.MarkCompleted(m.ID)
-		m.Status = models.StatusCompleted
 		s.mu.Lock()
 		s.current = nil
 		s.mu.Unlock()

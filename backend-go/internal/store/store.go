@@ -53,7 +53,7 @@ func (s *Store) ListActive() []*models.Message {
 	defer s.muByID.Unlock()
 	out := make([]*models.Message, 0, len(s.byID))
 	for _, m := range s.byID {
-		if m.Status != models.StatusCompleted {
+		if !m.IsCompleted() {
 			out = append(out, m)
 		}
 	}
@@ -69,13 +69,14 @@ func (s *Store) MarkCompleted(id string) bool {
 	if !ok {
 		return false
 	}
-	m.Status = models.StatusCompleted
+	m.MarkCompleted()
 	return true
 }
 
-// Update runs fn under the store lock while holding a per-message lock so
-// that callers can mutate multiple fields atomically. It is a no-op if the
-// message does not exist. The fn return value is ignored.
+// Update runs fn under the store lock. Callers must synchronize access to
+// Message's mutable fields via the Message's own locked methods
+// (MarkDisplayed, MarkCompleted, SetDisplayCount, etc.). It is a no-op if
+// the message does not exist.
 func (s *Store) Update(id string, fn func(m *models.Message)) bool {
 	s.muByID.Lock()
 	defer s.muByID.Unlock()

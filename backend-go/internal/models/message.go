@@ -4,6 +4,7 @@ package models
 
 import (
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -64,7 +65,17 @@ func ParseAlign(s string) (string, bool) {
 }
 
 // Message represents a single queue entry destined for the display.
+//
+// The fields Status, DisplayCount and LastDisplayedAt are mutated by the
+// scheduler goroutine (when a message is shown) and by the HTTP handler (when
+// a message is deleted), while concurrent readers (ToDTO, queue/history
+// snapshots) run in other goroutines. mu guards only those three mutable
+// fields; the remaining fields are set once at construction and never change,
+// so they are safe to read without the lock.
 type Message struct {
+	// mu guards Status, DisplayCount and LastDisplayedAt.
+	mu sync.RWMutex
+
 	ID                 string        `json:"id"`
 	Message            string        `json:"message"`
 	CreatedAt          time.Time     `json:"-"`
@@ -78,6 +89,57 @@ type Message struct {
 	// Align is a publish-time rendering hint ("", "center" or "right"); it is
 	// not part of the JSON API surface.
 	Align string `json:"-"`
+}
+
+// MarkDisplayed records that the message was just shown once: it stamps
+// LastDisplayedAt, increments DisplayCount, and promotes Pending -> Active
+// on first display. Callers must hold no other Message lock.
+func (m *Message) MarkDisplayed(now time.Time) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.LastDisplayedAt = &now
+	m.DisplayCount++
+	if m.Status == StatusPending {
+		m.Status = StatusActive
+	}
+}
+
+// MarkCompleted transitions the message to Completed. Safe for concurrent
+// use with MarkDisplayed and readers.
+func (m *Message) MarkCompleted() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.Status = StatusCompleted
+}
+
+// DisplayCount returns the current display count (reading under lock).
+func (m *Message) DisplayCountSafe() int {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.DisplayCount
+}
+
+// IsCompleted reports whether the message has reached the Completed state.
+func (m *Message) IsCompleted() bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.Status == StatusCompleted
+}
+
+// StatusSafe returns the current status (reading under lock).
+func (m *Message) StatusSafe() MessageStatus {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.Status
+}
+
+// SetDisplayCount sets the display count to n (writing under lock).
+// It is intended for tests that need to simulate a specific count without
+// going through MarkDisplayed.
+func (m *Message) SetDisplayCount(n int) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.DisplayCount = n
 }
 
 // NewMessage constructs a Message with sensible defaults, generating a
@@ -118,8 +180,11 @@ const (
 	isoFormat = "2006-01-02T15:04:05"
 )
 
-// ToDTO converts a Message to its JSON DTO form.
+// ToDTO converts a Message to its JSON DTO form. It reads the mutable fields
+// under the read lock so concurrent scheduler/delete mutations don't tear reads.
 func (m *Message) ToDTO() MessageDTO {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	createdAt := m.CreatedAt.Format(isoFormat)
 	var lastAt *string
 	var lastTime *string

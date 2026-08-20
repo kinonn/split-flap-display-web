@@ -62,8 +62,8 @@ func TestAddDefaultsAndHistory(t *testing.T) {
 	if m.DisplayDuration != 12 || m.TargetDisplayCount != 7 {
 		t.Errorf("defaults not applied: %+v", m)
 	}
-	if m.Status != models.StatusPending {
-		t.Errorf("status = %v", m.Status)
+	if m.StatusSafe() != models.StatusPending {
+		t.Errorf("status = %v", m.StatusSafe())
 	}
 
 	hist := s.GetHistory()
@@ -90,11 +90,11 @@ func TestSelectNextMessageLowestCount(t *testing.T) {
 	id1, _ := s.AddMessage("aa", nil, nil, nil, "u", "")
 	id2, _ := s.AddMessage("bb", nil, nil, nil, "u", "")
 	// simulate aa being displayed twice.
-	s.store.Update(id1, func(m *models.Message) { m.DisplayCount = 2 })
-	s.store.Update(id2, func(m *models.Message) { m.DisplayCount = 1 })
+	s.store.Update(id1, func(m *models.Message) { m.SetDisplayCount(2) })
+	s.store.Update(id2, func(m *models.Message) { m.SetDisplayCount(1) })
 	got := s.SelectNextMessage()
 	if got.ID != id2 {
-		t.Errorf("expected bb (count=1) first, got %q count=%d", got.Message, got.DisplayCount)
+		t.Errorf("expected bb (count=1) first, got %q count=%d", got.Message, got.DisplayCountSafe())
 	}
 }
 
@@ -125,8 +125,8 @@ func TestRemoveMessage(t *testing.T) {
 	if s.RemoveMessage("00000000-0000-0000-0000-000000000000") {
 		t.Fatal("non-existent should be false")
 	}
-	if m := s.store.Get(id); m == nil || m.Status != models.StatusCompleted {
-		t.Errorf("status = %v", m)
+	if m := s.store.Get(id); m == nil || !m.IsCompleted() {
+		t.Errorf("status = %v", m.StatusSafe())
 	}
 }
 
@@ -155,8 +155,8 @@ func TestQueueSnapshotOrdering(t *testing.T) {
 	idNormal, _ := s.AddMessage("n1", nil, nil, nil, "u", "")
 	high := models.PriorityHigh
 	idHigh, _ := s.AddMessage("h1", nil, nil, &high, "u", "")
-	s.store.Update(idHigh, func(m *models.Message) { m.DisplayCount = 5 })
-	s.store.Update(idNormal, func(m *models.Message) { m.DisplayCount = 1 })
+	s.store.Update(idHigh, func(m *models.Message) { m.SetDisplayCount(5) })
+	s.store.Update(idNormal, func(m *models.Message) { m.SetDisplayCount(1) })
 
 	snap := s.QueueSnapshot()
 	if len(snap) != 2 {
