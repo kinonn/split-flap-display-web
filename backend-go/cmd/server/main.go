@@ -16,17 +16,11 @@ import (
 )
 
 func main() {
-	confPath := "backend-go/app.conf"
-	if p, err := filepath.Abs("app.conf"); err == nil {
-		confPath = p
-	}
+	confPath := findConfigPath()
 	cfg := config.Load(confPath)
 	cfg.Log()
 
-	// Locate frontend/static relative to the working directory. The Docker
-	// container runs the binary from /app; the static dir lives under
-	// frontend/static.
-	staticDir := "frontend/static"
+	staticDir := findStaticDir()
 
 	mq := mqttclient.New(cfg.MQTTBrokerHost, cfg.MQTTBrokerPort, cfg.MQTTClientID, cfg.SubscribeTopic)
 	sched := scheduler.New(mq, cfg.PublishTopic, cfg.DefaultDisplayDuration, cfg.DefaultTargetDisplayCount, cfg.DisplayWidth, cfg.IdleMessage, cfg.IdleMode, cfg.IdlePublishInterval)
@@ -70,4 +64,56 @@ func main() {
 	mq.Stop()
 	_ = srv.Shutdown()
 	log.Printf("stopped")
+}
+
+func findConfigPath() string {
+	candidates := []string{
+		"app.conf",
+		"backend-go/app.conf",
+	}
+	if exe, err := os.Executable(); err == nil {
+		exeDir := filepath.Dir(exe)
+		candidates = append(candidates,
+			filepath.Join(exeDir, "app.conf"),
+			filepath.Join(exeDir, "backend-go", "app.conf"),
+			filepath.Join(exeDir, "..", "app.conf"),
+			filepath.Join(exeDir, "..", "backend-go", "app.conf"),
+		)
+	}
+	// Also try parent of cwd for `cd backend-go && go run` case
+	candidates = append(candidates, "../backend-go/app.conf", "../app.conf")
+	for _, c := range candidates {
+		if _, err := os.Stat(c); err == nil {
+			if p, err := filepath.Abs(c); err == nil {
+				return p
+			}
+			return c
+		}
+	}
+	if p, err := filepath.Abs("app.conf"); err == nil {
+		return p
+	}
+	return "backend-go/app.conf"
+}
+
+func findStaticDir() string {
+	candidates := []string{
+		"frontend/static",
+		"../frontend/static",
+	}
+	if exe, err := os.Executable(); err == nil {
+		exeDir := filepath.Dir(exe)
+		candidates = append(candidates,
+			filepath.Join(exeDir, "frontend", "static"),
+			filepath.Join(exeDir, "..", "frontend", "static"),
+			filepath.Join(exeDir, "..", "..", "frontend", "static"),
+			filepath.Join(exeDir, "backend-go", "frontend", "static"),
+		)
+	}
+	for _, c := range candidates {
+		if info, err := os.Stat(c); err == nil && info.IsDir() {
+			return c
+		}
+	}
+	return "frontend/static"
 }

@@ -47,8 +47,10 @@ type Client struct {
 	historySubsMu sync.Mutex
 	historySubs   map[*queue.Queue]struct{}
 
-	cancel context.CancelFunc
-	done   chan struct{}
+	running     atomic.Bool
+	lifecycleMu sync.Mutex
+	cancel      context.CancelFunc
+	done        chan struct{}
 }
 
 // New constructs an unconnected Client.
@@ -89,11 +91,20 @@ func New(host string, port int, clientID, subscribeTopic string) *Client {
 // Start spawns the background connection goroutine. It is safe to call
 // multiple times; only the first call has any effect.
 func (c *Client) Start(ctx context.Context) {
+	c.lifecycleMu.Lock()
+	defer c.lifecycleMu.Unlock()
+	if c.running.Load() {
+		return
+	}
+	c.running.Store(true)
 	c.client = pahomqtt.NewClient(c.opts)
 	ctx, cancel := context.WithCancel(ctx)
 	c.cancel = cancel
+	c.done = make(chan struct{})
+	done := c.done
 	go func() {
-		defer close(c.done)
+		defer close(done)
+		defer c.running.Store(false)
 		first := true
 		for {
 			select {
@@ -102,7 +113,13 @@ func (c *Client) Start(ctx context.Context) {
 			default:
 			}
 			token := c.client.Connect()
-			if token.Wait() && token.Error() != nil {
+			// Wait for Connect with context cancellation support.
+			select {
+			case <-ctx.Done():
+				return
+			case <-token.Done():
+			}
+			if token.Error() != nil {
 				if first {
 					log.Printf("mqtt: initial connect failed: %v", token.Error())
 				} else {
@@ -124,14 +141,27 @@ func (c *Client) Start(ctx context.Context) {
 }
 
 // Stop disconnects cleanly and waits for the background goroutine.
+// It is safe to call without a prior Start and is idempotent.
 func (c *Client) Stop() {
-	if c.cancel != nil {
-		c.cancel()
+	c.lifecycleMu.Lock()
+	if !c.running.Load() {
+		c.lifecycleMu.Unlock()
+		return
 	}
-	if c.client != nil {
-		c.client.Disconnect(250)
+	c.running.Store(false)
+	cancel := c.cancel
+	client := c.client
+	done := c.done
+	c.lifecycleMu.Unlock()
+	if cancel != nil {
+		cancel()
 	}
-	<-c.done
+	if client != nil {
+		client.Disconnect(250)
+	}
+	if done != nil {
+		<-done
+	}
 }
 
 // Publish publishes a raw UTF-8 string payload to the given topic.

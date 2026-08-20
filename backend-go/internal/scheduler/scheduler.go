@@ -46,9 +46,10 @@ type Scheduler struct {
 	histMu sync.Mutex
 	hist   []models.HistoryEntry
 
-	running atomic.Bool
-	cancel   context.CancelFunc
-	done     chan struct{}
+	running     atomic.Bool
+	lifecycleMu sync.Mutex
+	cancel      context.CancelFunc
+	done        chan struct{}
 }
 
 // New constructs a new scheduler. The scheduler is not started; call Start.
@@ -531,13 +532,18 @@ func (s *Scheduler) handleIdle(ctx context.Context) {
 
 // Start launches the scheduler loop goroutine. Idempotent.
 func (s *Scheduler) Start(ctx context.Context) {
-	if !s.running.CompareAndSwap(false, true) {
+	s.lifecycleMu.Lock()
+	defer s.lifecycleMu.Unlock()
+	if s.running.Load() {
 		return
 	}
+	s.running.Store(true)
 	ctx, cancel := context.WithCancel(ctx)
 	s.cancel = cancel
+	s.done = make(chan struct{})
+	done := s.done
 	go func() {
-		defer close(s.done)
+		defer close(done)
 		for {
 			if err := s.schedulerTick(ctx); err != nil {
 				if errors.Is(err, context.Canceled) {
@@ -563,11 +569,23 @@ func (s *Scheduler) Start(ctx context.Context) {
 }
 
 // Stop cancels the scheduler loop and waits for it to finish.
+// It is safe to call without a prior Start and is idempotent.
 func (s *Scheduler) Stop() {
-	if s.cancel != nil {
-		s.cancel()
+	s.lifecycleMu.Lock()
+	if !s.running.Load() {
+		s.lifecycleMu.Unlock()
+		return
 	}
-	<-s.done
+	s.running.Store(false)
+	cancel := s.cancel
+	done := s.done
+	s.lifecycleMu.Unlock()
+	if cancel != nil {
+		cancel()
+	}
+	if done != nil {
+		<-done
+	}
 }
 
 // --- Helpers -------------------------------------------------------------
