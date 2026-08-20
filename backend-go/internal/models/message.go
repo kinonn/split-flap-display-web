@@ -126,6 +126,22 @@ func (m *Message) IsCompleted() bool {
 	return m.Status == StatusCompleted
 }
 
+// StatusSafe returns the current status (reading under lock).
+func (m *Message) StatusSafe() MessageStatus {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.Status
+}
+
+// SetDisplayCount sets the display count to n (writing under lock).
+// It is intended for tests that need to simulate a specific count without
+// going through MarkDisplayed.
+func (m *Message) SetDisplayCount(n int) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.DisplayCount = n
+}
+
 // NewMessage constructs a Message with sensible defaults, generating a
 // new UUID and the current timestamp.
 func NewMessage(text string, targetDisplayCount, displayDuration int, priority Priority, user, align string) *Message {

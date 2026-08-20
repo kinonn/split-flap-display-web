@@ -371,6 +371,13 @@ func (s *Scheduler) SelectNextMessage() *models.Message {
 	if len(active) == 0 {
 		return nil
 	}
+	// Snapshot display counts under the per-message lock so the sort
+	// comparator never races with concurrent MarkDisplayed/MarkCompleted
+	// mutations and sees a consistent view.
+	counts := make(map[*models.Message]int, len(active))
+	for _, m := range active {
+		counts[m] = m.DisplayCountSafe()
+	}
 	sort.SliceStable(active, func(i, j int) bool {
 		ai, aj := active[i], active[j]
 		ri := -models.PriorityRank(ai.Priority)
@@ -378,8 +385,9 @@ func (s *Scheduler) SelectNextMessage() *models.Message {
 		if ri != rj {
 			return ri < rj
 		}
-		if ai.DisplayCount != aj.DisplayCount {
-			return ai.DisplayCount < aj.DisplayCount
+		ci, cj := counts[ai], counts[aj]
+		if ci != cj {
+			return ci < cj
 		}
 		return ai.CreatedAt.Before(aj.CreatedAt)
 	})
