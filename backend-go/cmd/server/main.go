@@ -36,19 +36,20 @@ func main() {
 		sched.Start(rootCtx)
 	}
 
-	srv := api.New(&api.Server{
+	server := &api.Server{
 		Cfg:       cfg,
 		MQTT:      mq,
 		Scheduler: sched,
 		StaticDir: staticDir,
-	})
+	}
+	srv := api.New(server)
 
 	addr := ":8100"
 	log.Printf("listening on %s", addr)
 
 	go func() {
 		if err := srv.Listen(addr); err != nil {
-			log.Fatalf("http server error: %v", err)
+			log.Printf("http server error: %v", err)
 		}
 	}()
 
@@ -62,7 +63,9 @@ func main() {
 		sched.Stop()
 	}
 	mq.Stop()
-	_ = srv.Shutdown()
+	// Server.Shutdown cancels active SSE streams first; without that,
+	// Fiber's Shutdown would block forever on long-lived SSE connections.
+	_ = server.Shutdown()
 	log.Printf("stopped")
 }
 

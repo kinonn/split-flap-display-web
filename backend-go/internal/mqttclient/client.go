@@ -166,10 +166,16 @@ func (c *Client) Stop() {
 
 // Publish publishes a raw UTF-8 string payload to the given topic.
 func (c *Client) Publish(topic, payload string, qos byte) error {
-	if !c.connected.Load() {
+	// Snapshot the client under lifecycleMu: c.client is assigned in Start
+	// and read here, so an unsynchronized read could race with Start (and
+	// panic on a nil client if Publish is called before Start).
+	c.lifecycleMu.Lock()
+	client := c.client
+	c.lifecycleMu.Unlock()
+	if client == nil || !c.connected.Load() {
 		return fmt.Errorf("mqtt client not connected")
 	}
-	token := c.client.Publish(topic, qos, false, payload)
+	token := client.Publish(topic, qos, false, payload)
 	// Fire-and-retain: wait briefly for the token to complete to surface
 	// errors, but paho may queue if disconnected.
 	if !token.WaitTimeout(5 * time.Second) {

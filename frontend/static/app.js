@@ -20,8 +20,60 @@ function getInputValue() {
     return normalizeInputText(inputEl.textContent || "");
 }
 
+// Returns the number of characters before the caret inside el, or -1 if
+// the selection cannot be measured (e.g. el is not focused).
+function getCaretCharOffset(el) {
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0) return -1;
+    const range = selection.getRangeAt(0);
+    if (!el.contains(range.endContainer)) return -1;
+    const preRange = range.cloneRange();
+    preRange.selectNodeContents(el);
+    preRange.setEnd(range.endContainer, range.endOffset);
+    return preRange.toString().length;
+}
+
+// Places the caret after the given number of characters in el. Each child
+// span of the input represents exactly one character.
+function setCaretCharOffset(el, offset) {
+    const selection = window.getSelection();
+    const range = document.createRange();
+    if (el.childNodes.length === 0 || offset <= 0) {
+        range.setStart(el, 0);
+    } else {
+        let node = null;
+        let remaining = offset;
+        for (let i = 0; i < el.childNodes.length && remaining > 0; i++) {
+            node = el.childNodes[i];
+            remaining--;
+        }
+        if (remaining > 0 || !node) {
+            range.setStartAfter(el.lastChild);
+        } else {
+            range.setStartAfter(node);
+        }
+    }
+    range.collapse(true);
+    selection.removeAllRanges();
+    selection.addRange(range);
+}
+
 function renderInputText(value) {
     const normalizedValue = normalizeInputText(value);
+
+    // Skip the rebuild when nothing changed: rebuilding the DOM on every
+    // keystroke breaks IME composition, native undo, and (before the caret
+    // preservation below) forced the caret to the end, making mid-string
+    // editing impossible.
+    if (normalizedValue === getInputValue()) {
+        return;
+    }
+
+    // Remember where the caret was so it can be restored after the DOM is
+    // rebuilt (-1 when the input is not focused, e.g. programmatic clears).
+    const caretOffset = getCaretCharOffset(inputEl);
+    const hadFocus = document.activeElement === inputEl;
+
     inputEl.innerHTML = "";
     const chars = Array.from(normalizedValue || "");
     const fragment = document.createDocumentFragment();
@@ -35,17 +87,10 @@ function renderInputText(value) {
 
     inputEl.appendChild(fragment);
 
-    const selection = window.getSelection();
-    const range = document.createRange();
-    if (inputEl.childNodes.length === 0) {
-        range.setStart(inputEl, 0);
-    } else {
-        range.setStartAfter(inputEl.lastChild);
+    if (hadFocus) {
+        setCaretCharOffset(inputEl, caretOffset < 0 ? chars.length : Math.min(caretOffset, chars.length));
+        inputEl.focus();
     }
-    range.collapse(true);
-    selection.removeAllRanges();
-    selection.addRange(range);
-    inputEl.focus();
 }
 
 let previousValue = "";

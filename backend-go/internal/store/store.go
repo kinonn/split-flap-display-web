@@ -2,6 +2,7 @@
 package store
 
 import (
+	"sort"
 	"sync"
 
 	"splitflap-web/internal/models"
@@ -58,6 +59,46 @@ func (s *Store) ListActive() []*models.Message {
 		}
 	}
 	return out
+}
+
+// CountActive returns the number of messages whose status is not Completed.
+func (s *Store) CountActive() int {
+	s.muByID.Lock()
+	defer s.muByID.Unlock()
+	n := 0
+	for _, m := range s.byID {
+		if !m.IsCompleted() {
+			n++
+		}
+	}
+	return n
+}
+
+// EvictCompleted deletes the oldest Completed messages so that at most
+// maxKeep Completed messages remain in the store. Without eviction the
+// store grows without bound on a long-running server. It returns the
+// number of messages removed.
+func (s *Store) EvictCompleted(maxKeep int) int {
+	s.muByID.Lock()
+	defer s.muByID.Unlock()
+	var completed []*models.Message
+	for _, m := range s.byID {
+		if m.IsCompleted() {
+			completed = append(completed, m)
+		}
+	}
+	if len(completed) <= maxKeep {
+		return 0
+	}
+	// Oldest first (by creation time).
+	sort.Slice(completed, func(i, j int) bool {
+		return completed[i].CreatedAt.Before(completed[j].CreatedAt)
+	})
+	toRemove := len(completed) - maxKeep
+	for _, m := range completed[:toRemove] {
+		delete(s.byID, m.ID)
+	}
+	return toRemove
 }
 
 // MarkCompleted sets the status of the message with the given ID to

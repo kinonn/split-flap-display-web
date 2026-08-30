@@ -8,7 +8,11 @@ services:
     ports:
       - "8100:8100"
     env_file:
-      - backend-go/app.conf
+      # app.conf is git-ignored; make it optional so `docker compose up`
+      # works on a fresh clone (the backend falls back to built-in
+      # defaults when no env vars are set). Requires Compose >= 2.24.
+      - path: backend-go/app.conf
+        required: false
     volumes:
       - /etc/localtime:/etc/localtime:ro
     healthcheck:
