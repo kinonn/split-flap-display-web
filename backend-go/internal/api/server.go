@@ -4,10 +4,14 @@ package api
 
 import (
 	"bufio"
+	"bytes"
 	"context"
+	"errors"
 	"log"
 	"regexp"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -26,6 +30,30 @@ type Server struct {
 	Scheduler *scheduler.Scheduler
 	// Spawning a staticDir as explicit field for clarity.
 	StaticDir string
+
+	// app is the Fiber application created by New; used by Shutdown.
+	app *fiber.App
+
+	// sseMu guards sseCancels, which tracks the cancel function of every
+	// active SSE stream so they can be cancelled on shutdown. Entries are
+	// keyed by the stream's ctx.Done() channel (comparable) so duplicate
+	// registration/unregistration is safe.
+	sseMu      sync.Mutex
+	sseCancels map[<-chan struct{}]context.CancelFunc
+}
+
+// Shutdown gracefully stops the HTTP server. Active SSE streams are
+// cancelled first: Fiber's Shutdown waits for all live connections to
+// finish, and SSE connections are long-lived by design, so without this
+// shutdown would block forever whenever a client is connected.
+func (s *Server) Shutdown() error {
+	s.sseMu.Lock()
+	for _, cancel := range s.sseCancels {
+		cancel()
+	}
+	s.sseCancels = nil
+	s.sseMu.Unlock()
+	return s.app.ShutdownWithTimeout(5 * time.Second)
 }
 
 // slowRequestThreshold is the latency above which a successful request is
@@ -79,6 +107,7 @@ func New(s *Server) *fiber.App {
 			return c.SendFile(s.StaticDir + "/index.html")
 		})
 	}
+	s.app = app
 	return app
 }
 
@@ -108,9 +137,17 @@ type publishRequest struct {
 
 func (s *Server) handlePublish(c *fiber.Ctx) error {
 	var req publishRequest
-	if err := c.BodyParser(&req); err != nil {
-		// Some clients post empty bodies or raw text; tolerate parse errors.
-		_ = err
+	body := bytes.TrimSpace(c.Body())
+	if len(body) > 0 {
+		if strings.HasPrefix(strings.ToLower(string(c.Request().Header.ContentType())), "text/plain") {
+			// Raw text bodies are used verbatim as the message text.
+			req.Text = string(body)
+		} else if err := c.BodyParser(&req); err != nil {
+			// A non-empty body that cannot be parsed must not be silently
+			// queued as an empty message: that would wipe the physical
+			// display while reporting success to the caller.
+			return sendError(c, 400, "invalid JSON body")
+		}
 	}
 
 	// The message text is used exactly as received: no trimming, no fallback.
@@ -155,9 +192,12 @@ func (s *Server) handlePublish(c *fiber.Ctx) error {
 	id, err := s.Scheduler.AddMessage(text, req.TargetDisplayCount, req.DisplayDuration, priority, user, align)
 	if err != nil {
 		ve, ok := err.(*scheduler.ValidationError)
+		var qfe *scheduler.QueueFullError
 		switch {
 		case ok:
 			return sendError(c, 400, ve.Error())
+		case errors.As(err, &qfe):
+			return sendError(c, 429, qfe.Error())
 		default:
 			return sendError(c, 500, err.Error())
 		}
@@ -223,6 +263,28 @@ func (s *Server) handleSSE(c *fiber.Ctx) error {
 	merged := queue.New(1000)
 
 	ctx, cancel := context.WithCancel(context.Background())
+	s.registerSSE(ctx.Done(), cancel)
+
+	// writerStarted is set once fasthttp invokes the stream writer. If the
+	// writer never runs (client vanished before the response began), the
+	// fallback below cancels the relays and drops the subscriptions after
+	// a grace period so they cannot leak. Note: the fasthttp request
+	// context must NOT be touched from this goroutine (c.Context().Done()
+	// panics once fasthttp has released the RequestCtx).
+	var writerStarted atomic.Bool
+	go func() {
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(30 * time.Second):
+		}
+		if !writerStarted.Load() {
+			cancel()
+			s.Scheduler.UnsubscribeQueue(schedQ)
+			s.MQTT.UnsubscribeDisplayState(mqttQ)
+			s.unregisterSSE(ctx.Done())
+		}
+	}()
 
 	spawnRelay := func(src *queue.Queue) {
 		go func() {
@@ -246,9 +308,11 @@ func (s *Server) handleSSE(c *fiber.Ctx) error {
 	spawnRelay(mqttQ)
 
 	c.Response().SetBodyStreamWriter(func(w *bufio.Writer) {
+		writerStarted.Store(true)
 		// Cleanup happens when the writer function exits (i.e. the
 		// client disconnects or the response is finalised).
 		defer cancel()
+		defer s.unregisterSSE(ctx.Done())
 		defer s.Scheduler.UnsubscribeQueue(schedQ)
 		defer s.MQTT.UnsubscribeDisplayState(mqttQ)
 
@@ -288,6 +352,10 @@ func (s *Server) handleSSE(c *fiber.Ctx) error {
 		}
 		for {
 			select {
+			case <-ctx.Done():
+				// Server shutdown or client context cancelled: end the
+				// stream so Shutdown is not blocked by this connection.
+				return
 			case <-ticker.C:
 				if _, err := w.WriteString(":keepalive\n\n"); err != nil {
 					return
@@ -309,6 +377,23 @@ func (s *Server) handleSSE(c *fiber.Ctx) error {
 		}
 	})
 	return nil
+}
+
+// registerSSE tracks an active SSE stream's cancel function.
+func (s *Server) registerSSE(done <-chan struct{}, cancel context.CancelFunc) {
+	s.sseMu.Lock()
+	if s.sseCancels == nil {
+		s.sseCancels = make(map[<-chan struct{}]context.CancelFunc)
+	}
+	s.sseCancels[done] = cancel
+	s.sseMu.Unlock()
+}
+
+// unregisterSSE removes a finished SSE stream's cancel function.
+func (s *Server) unregisterSSE(done <-chan struct{}) {
+	s.sseMu.Lock()
+	delete(s.sseCancels, done)
+	s.sseMu.Unlock()
 }
 
 // sendError writes a JSON error body matching the FastAPI-style shape the

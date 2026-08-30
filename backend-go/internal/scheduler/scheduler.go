@@ -6,12 +6,14 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
+	"unicode/utf8"
 
 	"splitflap-web/internal/models"
 	"splitflap-web/internal/mqttclient"
@@ -171,6 +173,27 @@ func (s *Scheduler) HistorySnapshot() []models.HistoryEntry {
 
 // --- Message ops ----------------------------------------------------------
 
+// Limits protecting a long-running server from unbounded memory growth
+// and display flooding (H3 in the audit).
+const (
+	// maxTextLen is the maximum accepted message length in runes.
+	maxTextLen = 256
+	// maxActiveMessages is the maximum number of non-completed messages
+	// (pending + currently displayed) allowed at once.
+	maxActiveMessages = 100
+	// maxCompletedKeep is how many Completed messages the store retains
+	// before evicting the oldest.
+	maxCompletedKeep = 200
+)
+
+// QueueFullError is returned by AddMessage when the queue has reached its
+// maximum size. The API layer maps it to HTTP 429.
+type QueueFullError struct{ Max int }
+
+func (e *QueueFullError) Error() string {
+	return fmt.Sprintf("queue is full (max %d messages)", e.Max)
+}
+
 // AddMessage validates the input, creates a new Message in the store,
 // records history, wakes the scheduler if idle, and notifies SSE
 // subscribers. It returns the new message ID and a validation error.
@@ -178,6 +201,12 @@ func (s *Scheduler) HistorySnapshot() []models.HistoryEntry {
 func (s *Scheduler) AddMessage(text string, targetDisplayCount, displayDuration *int, priority *models.Priority, user, align string) (string, error) {
 	// An empty text is valid: at display time it is rendered as a string of
 	// spaces filling the display width (effectively clearing the display).
+	if utf8.RuneCountInString(text) > maxTextLen {
+		return "", validationError(fmt.Sprintf("text must be at most %d characters", maxTextLen))
+	}
+	if n := s.store.CountActive(); n >= maxActiveMessages {
+		return "", &QueueFullError{Max: maxActiveMessages}
+	}
 	align, ok := models.ParseAlign(align)
 	if !ok {
 		return "", validationError("align must be 'left', 'center' or 'right'")
@@ -206,6 +235,7 @@ func (s *Scheduler) AddMessage(text string, targetDisplayCount, displayDuration 
 
 	m := models.NewMessage(text, tdc, dd, pr, user, align)
 	s.store.Add(m)
+	s.store.EvictCompleted(maxCompletedKeep)
 	s.recordHistory(m)
 	s.signalWakeup()
 
@@ -611,17 +641,19 @@ func (s *Scheduler) publishPayload(m *models.Message) string {
 // display of the given width. Padding is skipped when the text already
 // fills or exceeds the width, when the width is not positive, or when
 // align is empty/"left". Odd remainders are left-biased ("    31C     "
-// for width 12, text "31C").
+// for width 12, text "31C"). Width is measured in runes, not bytes, so
+// multi-byte UTF-8 text pads correctly for character-module displays.
 func padToWidth(text, align string, width int) string {
-	if width <= 0 || len(text) >= width {
+	textLen := utf8.RuneCountInString(text)
+	if width <= 0 || textLen >= width {
 		return text
 	}
 	switch align {
 	case "center":
-		left := (width - len(text)) / 2
-		return strings.Repeat(" ", left) + text + strings.Repeat(" ", width-len(text)-left)
+		left := (width - textLen) / 2
+		return strings.Repeat(" ", left) + text + strings.Repeat(" ", width-textLen-left)
 	case "right":
-		return strings.Repeat(" ", width-len(text)) + text
+		return strings.Repeat(" ", width-textLen) + text
 	default:
 		return text
 	}
